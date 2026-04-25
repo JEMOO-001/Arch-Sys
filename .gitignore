@@ -1,32 +1,43 @@
-# Node.js / TypeScript
-frontend/node_modules/
-frontend/dist/
-frontend/build/
-frontend/*.log
-frontend/.env*
-
-# Python / FastAPI
-backend/__pycache__/
-backend/*.pyc
-backend/.venv/
-backend/venv/
-backend/dist/
-backend/*.egg-info/
-backend/.env*
-
-# C# / .NET (ArcGIS Pro Add-in)
-addin/bin/
-addin/obj/
-addin/*.user
-addin/*.suo
-addin/packages/
-
-# Universal
-.DS_Store
-Thumbs.db
-*.tmp
-*.swp
+# IDEs and Editors
 .vscode/
 .idea/
+*.swp
+*.tmp
 *.log
+.vs/
+bin/
+obj/
+*.user
+*.suo
+
+# Agent and CLI Specific folders
+.claude/
+.gemini/
+.specify/
+.remember/
+.git-history/
+
+# Node / Frontend
+node_modules/
+dist/
+build/
 .env*
+.eslintcache
+
+# Python / Backend
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+
+# Project specific non-code files
+VSBuild Result.txt
+Debug Result.txt
+AA_answers.md
+AA_extracted.txt
+architecture-diagram.html
+*PRD.md
+*.sln.dot
