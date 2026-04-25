@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "ArcLayoutSentinel": {
+      "commandName": "Executable",
+      "executablePath": "C:\\Program Files\\ArcGIS\\Pro\\bin\\ArcGISPro.exe",
+      "workingDirectory": "C:\\Program Files\\ArcGIS\\Pro\\bin\\",
+      "nativeDebugging": true,
+      "jsWebView2Debugging": true
+    }
+  }
+}

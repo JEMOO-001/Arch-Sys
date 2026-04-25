@@ -1,0 +1,32 @@
+# Node.js / TypeScript
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/*.log
+frontend/.env*
+
+# Python / FastAPI
+backend/__pycache__/
+backend/*.pyc
+backend/.venv/
+backend/venv/
+backend/dist/
+backend/*.egg-info/
+backend/.env*
+
+# C# / .NET (ArcGIS Pro Add-in)
+addin/bin/
+addin/obj/
+addin/*.user
+addin/*.suo
+addin/packages/
+
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+*.log
+.env*

@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+pyodbc
+python-multipart
+aioodbc
