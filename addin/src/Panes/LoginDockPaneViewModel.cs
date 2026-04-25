@@ -9,9 +9,15 @@ using ArcLayoutSentinel.Services;
 
 namespace ArcLayoutSentinel.Panes
 {
-    internal class LoginDockPaneViewModel : DockPane
+    public class LoginDockPaneViewModel : DockPane
     {
         private const string _dockPaneID = "ArcLayoutSentinel_LoginDockPane";
+
+        public LoginDockPaneViewModel()
+        {
+            // Ensure config is loaded even if InitializeAsync doesn't fire
+            ConfigManager.Load();
+        }
 
         private string _username = "";
         private string _statusText = "Checking server...";
@@ -179,8 +185,18 @@ namespace ArcLayoutSentinel.Panes
 
         internal static void Show()
         {
+            // Find and activate the dock pane
             var pane = FrameworkApplication.DockPaneManager.Find(_dockPaneID);
-            pane?.Activate();
+            if (pane != null)
+            {
+                pane.Activate();
+            }
+            else
+            {
+                // If not found, it means the dock pane is not properly registered in Config.daml
+                throw new InvalidOperationException(
+                    $"DockPane '{_dockPaneID}' not found. Check Config.daml registration.");
+            }
         }
     }
 }

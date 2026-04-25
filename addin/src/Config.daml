@@ -13,17 +13,28 @@
       <tabs>
         <tab id="ArcLayoutSentinel_Tab1" caption="Sentinel">
           <groups>
-            <group id="ArcLayoutSentinel_Group1" caption="Archival" appearsOnAddInTab="true">
+            <group id="ArcLayoutSentinel_ConnectGroup" caption="Connection" appearsOnAddInTab="true">
+              <button refID="ArcLayoutSentinel_ConnectButton" size="large" />
+            </group>
+            <group id="ArcLayoutSentinel_ArchiveGroup" caption="Archival" appearsOnAddInTab="true">
               <button refID="ArcLayoutSentinel_ArchiveButton" size="large" />
             </group>
           </groups>
         </tab>
       </tabs>
       <controls>
+        <button id="ArcLayoutSentinel_ConnectButton" caption="Connect" className="ArcLayoutSentinel.Ribbon.ConnectButton" loadOnClick="true" smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue16.png" largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue32.png">
+          <tooltip heading="Connect">Login to Sentinel server<disabledText /></tooltip>
+        </button>
         <button id="ArcLayoutSentinel_ArchiveButton" caption="Archive Map" className="ArcLayoutSentinel.Ribbon.ArchiveButton" loadOnClick="true" smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue16.png" largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue32.png">
           <tooltip heading="Archive Map">Automatically export and register the current layout in the central database.<disabledText /></tooltip>
         </button>
       </controls>
+      <dockPanes>
+        <dockPane id="ArcLayoutSentinel_LoginDockPane" caption="Sentinel Login" className="ArcLayoutSentinel.Panes.LoginDockPaneViewModel" dock="group" dockWith="esri_core_projectDockPane">
+          <content className="ArcLayoutSentinel.Panes.LoginDockPaneView" />
+        </dockPane>
+      </dockPanes>
     </insertModule>
   </modules>
 </ArcGIS>
