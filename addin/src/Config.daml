@@ -1,59 +1,29 @@
-<ArcGIS defaultAssembly="ArcLayoutSentinel.dll" defaultNamespace="ArcLayoutSentinel" xmlns="http://schemas.esri.com/DADF/Registry" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schemas.esri.com/DADF/Registry file:///C:/Program%20Files/ArcGIS/Pro/bin/ArcGIS.Desktop.Framework.xsd">
-  <AddInInfo id="{5f2b3df8-90f8-4f7f-a87b-9ccf9690dfc1}" version="1.0.10" desktopVersion="3.4">
+<ArcGIS defaultAssembly="ArcLayoutSentinel.dll" defaultNamespace="ArcLayoutSentinel" xmlns="http://schemas.esri.com/DADL/Registry" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schemas.esri.com/DADL/Registry file:///C:/Program%20Files/ArcGIS/Pro/bin/ArcGIS.Desktop.Framework.xsd">
+  <AddInInfo id="{326b9623-286e-412e-a228-5694c965c270}" version="1.0" desktopVersion="3.0">
     <Name>ArcLayout Sentinel</Name>
     <Description>Enterprise Layout Archiving and Monitoring Tool</Description>
+    <Image>Images\AddinDesktop32.png</Image>
     <Author>GIS Team</Author>
     <Company>Enterprise</Company>
-    <Date>4/22/2026 11:00</Date>
+    <Date>4/21/2026</Date>
     <Subject>Framework</Subject>
   </AddInInfo>
-  
-  <conditions>
-    <insertCondition id="sentinel_logged_in_condition" caption="User is connected">
-      <state id="sentinel_logged_in_state" />
-    </insertCondition>
-  </conditions>
-
   <modules>
-    <insertModule id="ArcLayoutSentinel_Module" className="Module1" autoLoad="true" caption="Sentinel">
+    <insertModule id="ArcLayoutSentinel_Module" className="ArcLayoutSentinel.Module1" autoLoad="false" caption="Sentinel">
       <tabs>
         <tab id="ArcLayoutSentinel_Tab1" caption="Sentinel">
-          <group refID="ArcLayoutSentinel_Group_Connection" />
-          <group refID="ArcLayoutSentinel_Group_Archival" />
+          <groups>
+            <group id="ArcLayoutSentinel_Group1" caption="Archival" appearsOnAddInTab="true">
+              <button refID="ArcLayoutSentinel_ArchiveButton" size="large" />
+            </group>
+          </groups>
         </tab>
       </tabs>
-      <groups>
-        <group id="ArcLayoutSentinel_Group_Connection" caption="Account">
-          <button refID="ArcLayoutSentinel_ConnectButton" size="large" />
-        </group>
-        <group id="ArcLayoutSentinel_Group_Archival" caption="Archival">
-          <button refID="ArcLayoutSentinel_ArchiveButton" size="large" />
-        </group>
-      </groups>
       <controls>
-        <button id="ArcLayoutSentinel_ConnectButton" caption="Connect" className="Ribbon.ConnectButton"
-                largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonGreen32.png"
-                smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonGreen16.png">
-          <tooltip heading="Connect to Server">
-            Login to the Sentinel database. You must log in before archiving maps.
-          </tooltip>
-        </button>
-        <button id="ArcLayoutSentinel_ArchiveButton" caption="Archive Map" className="Ribbon.ArchiveButton" condition="sentinel_logged_in_condition">
-          <tooltip heading="Archive Map">
-            Automatically export and register the current layout in the central database.
-            <disabledText>You must connect to the server first.</disabledText>
-          </tooltip>
+        <button id="ArcLayoutSentinel_ArchiveButton" caption="Archive Map" className="ArcLayoutSentinel.Ribbon.ArchiveButton" loadOnClick="true" smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue16.png" largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue32.png">
+          <tooltip heading="Archive Map">Automatically export and register the current layout in the central database.<disabledText /></tooltip>
         </button>
       </controls>
-      <dockPanes>
-        <dockPane id="ArcLayoutSentinel_LoginDockPane"
-                  caption="Sentinel Login"
-                  className="Panes.LoginDockPaneViewModel"
-                  dock="float"
-                  dockWith="esri_core_projectDockPane">
-          <content className="Panes.LoginDockPaneView"/>
-        </dockPane>
-      </dockPanes>
     </insertModule>
   </modules>
 </ArcGIS>
