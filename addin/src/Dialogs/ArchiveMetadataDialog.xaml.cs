@@ -1,80 +1,55 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using ArcLayoutSentinel.Services;
 
 namespace ArcLayoutSentinel.Dialogs
 {
-    /// <summary>
-    /// Zero-SDK Archive Metadata Dialog - Standard WPF Window, no ArcGIS Pro SDK dependencies.
-    /// Constitution: "Zero-SDK UI" - WPF dialogs must not call ArcGIS Pro SDK on the UI thread.
-    /// Constitution: "Pre-Flight First" - Verify connectivity before archival operations.
-    /// </summary>
     public partial class ArchiveMetadataDialog : Window
     {
-        public string SelectedLayout => LayoutComboBox.SelectedItem?.ToString() ?? string.Empty;
+        public string SelectedLayout 
+        {
+            get
+            {
+                if (LayoutComboBox.SelectedItem is ComboBoxItem item)
+                    return item.Content?.ToString() ?? "";
+                return LayoutComboBox.SelectedItem?.ToString() ?? "";
+            }
+        }
         public string ProjectCode => ProjectCodeTextBox.Text.Trim();
         public string ClientName => ClientTextBox.Text.Trim();
         public string Category => CategoryTextBox.Text.Trim();
         public string CategoryPrefix => CategoryPrefixTextBox.Text.Trim().ToUpperInvariant();
-        public string ExportFormat => (ExportFormatComboBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Content?.ToString() ?? "PDF";
+        public string ExportFormat => (ExportFormatComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "PDF";
 
         private PreFlightService.PreFlightResult _lastPreFlightResult;
+        private List<string> _layoutNames;
+        private string _activeLayoutName;
 
         public ArchiveMetadataDialog(List<string> layoutNames, string activeLayoutName)
         {
             InitializeComponent();
             ConfigManager.Load();
 
-            // Populate ComboBox safely without touching ArcGIS Pro API
-            LayoutComboBox.Items.Clear();
+            _layoutNames = layoutNames;
+            _activeLayoutName = activeLayoutName;
+
             if (layoutNames != null)
             {
                 foreach (var name in layoutNames)
-                {
-                    if (!string.IsNullOrEmpty(name))
-                    {
-                        LayoutComboBox.Items.Add(name);
-                    }
-                }
+                    if (!string.IsNullOrEmpty(name)) LayoutComboBox.Items.Add(name);
             }
-
-            // Ensure active layout is in the list
             if (!string.IsNullOrEmpty(activeLayoutName) && !LayoutComboBox.Items.Contains(activeLayoutName))
-            {
                 LayoutComboBox.Items.Insert(0, activeLayoutName);
-            }
+            if (LayoutComboBox.Items.Count > 0) LayoutComboBox.SelectedIndex = 0;
 
-            // Select active or first
-            if (LayoutComboBox.Items.Count > 0)
-            {
-                if (!string.IsNullOrEmpty(activeLayoutName) && LayoutComboBox.Items.Contains(activeLayoutName))
-                {
-                    LayoutComboBox.SelectedItem = activeLayoutName;
-                }
-                else
-                {
-                    LayoutComboBox.SelectedIndex = 0;
-                }
-            }
-            else
-            {
-                LayoutComboBox.Items.Add("Current Layout");
-                LayoutComboBox.SelectedIndex = 0;
-            }
-
-            // Run pre-flight check on load
             _ = RunPreFlightCheckAsync();
         }
 
-        /// <summary>
-        /// Runs the pre-flight check and updates the UI.
-        /// Constitution: "Pre-Flight First" - Always verify before writes.
-        /// </summary>
-        private async Task RunPreFlightCheckAsync()
+        private async System.Threading.Tasks.Task RunPreFlightCheckAsync()
         {
             PreFlightButton.IsEnabled = false;
             ArchiveButton.IsEnabled = false;
@@ -84,8 +59,10 @@ namespace ArcLayoutSentinel.Dialogs
             try
             {
                 _lastPreFlightResult = await PreFlightService.RunPreFlightCheckAsync();
-
-                if (_lastPreFlightResult.AllPassed)
+                
+                System.Diagnostics.Debug.WriteLine($"PreFlight Result: AllPassed={_lastPreFlightResult?.AllPassed}");
+                
+                if (_lastPreFlightResult != null && _lastPreFlightResult.AllPassed)
                 {
                     PreFlightIndicator.Fill = new SolidColorBrush(Colors.Green);
                     PreFlightText.Text = "Pre-flight passed - ready to archive";
@@ -94,13 +71,14 @@ namespace ArcLayoutSentinel.Dialogs
                 else
                 {
                     PreFlightIndicator.Fill = new SolidColorBrush(Colors.Red);
-                    PreFlightText.Text = "Pre-flight failed - click 'Run Pre-Flight' for details";
+                    PreFlightText.Text = "Pre-flight failed - see details";
                 }
             }
             catch (Exception ex)
             {
                 PreFlightIndicator.Fill = new SolidColorBrush(Colors.Red);
-                PreFlightText.Text = $"Pre-flight error: {ex.Message}";
+                PreFlightText.Text = $"Error: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"PreFlight Error: {ex}");
             }
             finally
             {
@@ -108,80 +86,47 @@ namespace ArcLayoutSentinel.Dialogs
             }
         }
 
-        /// <summary>
-        /// Pre-Flight button click - Manual re-check.
-        /// </summary>
         private async void PreFlightButton_Click(object sender, RoutedEventArgs e)
         {
             await RunPreFlightCheckAsync();
-
             if (_lastPreFlightResult != null && !_lastPreFlightResult.AllPassed)
-            {
-                MessageBox.Show(_lastPreFlightResult.GetSummary(), "Pre-Flight Check Failed",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+                MessageBox.Show(_lastPreFlightResult.GetSummary(), "Pre-Flight Check Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
-        /// <summary>
-        /// Archive button click with Pre-Flight validation.
-        /// Constitution: "Pre-Flight First" - Block if checks fail.
-        /// Constitution: "Zero-SDK UI" - Pure WPF, no ArcGIS SDK.
-        /// </summary>
         private void ArchiveButton_Click(object sender, RoutedEventArgs e)
         {
+            System.Diagnostics.Debug.WriteLine("ArchiveButton_Click triggered");
+            
             if (_lastPreFlightResult == null || !_lastPreFlightResult.AllPassed)
             {
-                MessageBox.Show("Pre-flight checks must pass before archiving.\n\n" +
-                    (_lastPreFlightResult?.GetSummary() ?? "No pre-flight result available."),
-                    "Pre-Flight Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Pre-flight checks must pass before archiving.", "Pre-Flight Required", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(ProjectCode) ||
-                string.IsNullOrWhiteSpace(ClientName) ||
-                string.IsNullOrWhiteSpace(Category) ||
-                string.IsNullOrWhiteSpace(CategoryPrefix))
+            if (string.IsNullOrWhiteSpace(ProjectCodeTextBox.Text) || string.IsNullOrWhiteSpace(ClientTextBox.Text) ||
+                string.IsNullOrWhiteSpace(CategoryTextBox.Text) || string.IsNullOrWhiteSpace(CategoryPrefixTextBox.Text))
             {
-                MessageBox.Show("All fields are required.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("All fields are required.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (!Regex.IsMatch(CategoryPrefix, @"^[A-Z]{2}$"))
+            if (!Regex.IsMatch(CategoryPrefixTextBox.Text, @"^[A-Z]{2}$"))
             {
-                MessageBox.Show("Category Prefix must be exactly 2 uppercase letters (A-Z).",
-                    "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Category Prefix must be exactly 2 uppercase letters (A-Z).", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (!Regex.IsMatch(ProjectCode, @"^[A-Za-z0-9_\-]+$"))
-            {
-                MessageBox.Show("Project Code may only contain letters, digits, hyphens, and underscores.",
-                    "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (!Regex.IsMatch(ClientName, @"^[A-Za-z0-9 _\-]+$"))
-            {
-                MessageBox.Show("Client Name may only contain letters, digits, spaces, hyphens, and underscores.",
-                    "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(SelectedLayout))
-            {
-                MessageBox.Show("Please select a layout to archive.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            this.DialogResult = true;
-            this.Close();
+            DialogResult = true;
+            Close();
         }
 
-        /// <summary>
-        /// Gets the pre-flight result for the caller to verify before proceeding.
-        /// </summary>
+        private void CancelButton_Click(object sender, RoutedEventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine("CancelButton_Click triggered");
+            DialogResult = false;
+            Close();
+        }
+
         public PreFlightService.PreFlightResult GetPreFlightResult() => _lastPreFlightResult;
     }
 }

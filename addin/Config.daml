@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ArcGIS defaultAssembly="ArcLayoutSentinel.dll" defaultNamespace="ArcLayoutSentinel" xmlns="http://schemas.esri.com/DADF/Registry" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schemas.esri.com/DADF/Registry file:///C:/Program%20Files/ArcGIS/Pro/bin/ArcGIS.Desktop.Framework.xsd">
+  <AddInInfo id="{ab7b7fda-6880-46a0-b7b2-73714bcdfc36}" version="1.0" desktopVersion="3.0.36056">
+    <Name>Sentinel</Name>
+    <Description>Enterprise Layout Archiving and Monitoring Tool</Description>
+    <Author>GIS Team</Author>
+    <Company>Enterprise</Company>
+    <Date>4/26/2026</Date>
+    <Subject>Framework</Subject>
+  </AddInInfo>
+
+  <conditions>
+    <insertCondition id="sentinel_logged_in_state" caption="Sentinel Logged In">
+      <state id="sentinel_logged_in_state" />
+    </insertCondition>
+    <insertCondition id="sentinel_not_logged_in_state" caption="Sentinel Not Logged In">
+      <not>
+        <state id="sentinel_logged_in_state" />
+      </not>
+    </insertCondition>
+  </conditions>
+
+  <modules>
+    <insertModule id="Sentinel_Module" className="Module1" autoLoad="true" caption="Sentinel">
+      <tabs>
+        <tab id="Sentinel_Tab" caption="Sentinel" keytip="S">
+          <group refID="Sentinel_Group" />
+        </tab>
+      </tabs>
+
+      <groups>
+        <group id="Sentinel_Group" caption="Sentinel" appearsOnAddInTab="true" smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue16.png">
+          <button refID="Sentinel_ConnectButton" size="large" />
+          <button refID="Sentinel_ArchiveButton" size="large" />
+        </group>
+      </groups>
+
+      <controls>
+        <button id="Sentinel_ConnectButton" caption="Connect" className="ConnectButton" loadOnClick="true" largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue32.png" smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue16.png">
+          <tooltip heading="Connect">Connect to Sentinel server</tooltip>
+        </button>
+        <button id="Sentinel_ArchiveButton" caption="Archive" className="ArchiveButton" loadOnClick="true" condition="sentinel_logged_in_state" largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue32.png" smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue16.png">
+          <tooltip heading="Archive">Archive current layout to Sentinel</tooltip>
+        </button>
+      </controls>
+
+      <dockPanes>
+        <dockPane id="Sentinel_LoginPane" caption="Sentinel" className="LoginDockPaneViewModel">
+          <content className="LoginDockPaneView" />
+        </dockPane>
+      </dockPanes>
+    </insertModule>
+  </modules>
+</ArcGIS>

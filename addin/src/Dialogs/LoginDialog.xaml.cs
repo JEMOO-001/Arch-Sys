@@ -114,13 +114,19 @@ namespace ArcLayoutSentinel.Dialogs
 
             try
             {
-                bool success = await TryLoginCoreAsync(Username, PasswordBox.Password);
+                var (success, token, error) = await ApiService.LoginAsync(Username, PasswordBox.Password);
 
                 if (success)
                 {
-                    // Save username for next time
+                    ConfigManager.ApiToken = token;
                     ConfigManager.LastUsername = Username;
+                    ConfigManager.SessionId = Guid.NewGuid().ToString();
+                    ConfigManager.SessionCreatedAt = DateTime.UtcNow;
+                    ConfigManager.SessionExpiresAt = DateTime.UtcNow.AddHours(24);
+                    ConfigManager.MachineId = ConfigManager.GetMachineId();
                     ConfigManager.Save();
+
+                    Module1.Current.SetLoggedInState(true);
 
                     StatusIndicator.Fill = new SolidColorBrush(Colors.Green);
                     StatusText.Text = "Login successful";
@@ -130,7 +136,7 @@ namespace ArcLayoutSentinel.Dialogs
                 }
                 else
                 {
-                    // Error messages are already shown by TryLoginCoreAsync
+                    MessageBox.Show(error, "Login Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     StatusIndicator.Fill = new SolidColorBrush(Colors.Red);
                     StatusText.Text = "Login failed";
                     LoginButton.IsEnabled = true;
@@ -143,96 +149,6 @@ namespace ArcLayoutSentinel.Dialogs
                 StatusText.Text = "Login error";
                 LoginButton.IsEnabled = true;
             }
-        }
-
-        private async Task<bool> TryLoginCoreAsync(string username, string password)
-        {
-            try
-            {
-                using (var client = new HttpClient())
-                {
-                    // Set a timeout to prevent hanging indefinitely
-                    client.Timeout = TimeSpan.FromSeconds(10);
-
-                    // Prepare form data - simple username/password authentication
-                    var formData = new System.Collections.Generic.Dictionary<string, string>
-                    {
-                        { "username", username },
-                        { "password", password }
-                    };
-                    var content = new FormUrlEncodedContent(formData);
-
-                    System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - Sending POST to {ConfigManager.BaseUrl}/auth/login");
-                    System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - Username: {username}");
-
-                    // Send POST to /auth/login
-                    var response = await client.PostAsync($"{ConfigManager.BaseUrl}/auth/login", content);
-
-                    System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - Response received: {response.StatusCode}");
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var json = await response.Content.ReadAsStringAsync();
-                        System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - Response JSON: {json}");
-
-                        using (var doc = JsonDocument.Parse(json))
-                        {
-                            if (doc.RootElement.TryGetProperty("access_token", out var tokenElement))
-                            {
-                                AccessToken = tokenElement.GetString();
-
-                                // Save token to ConfigManager
-                                ConfigManager.ApiToken = AccessToken;
-                                ConfigManager.Save();
-
-                                System.Diagnostics.Debug.WriteLine("DEBUG: TryLoginAsync - Login successful");
-                                return true;
-                            }
-                            else
-                            {
-                                System.Diagnostics.Debug.WriteLine("DEBUG: TryLoginAsync - No 'access_token' property in response");
-                                var keysList = new System.Collections.Generic.List<string>();
-                                foreach (var prop in doc.RootElement.EnumerateObject())
-                                {
-                                    keysList.Add(prop.Name);
-                                }
-                                System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - Response keys: {string.Join(", ", keysList)}");
-                                MessageBox.Show("API response doesn't contain access_token. Check API format.", "Response Format Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                                return false;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        var errorContent = await response.Content.ReadAsStringAsync();
-                        System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - Login failed with status {response.StatusCode}");
-                        System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - Error response: {errorContent}");
-                        MessageBox.Show($"Login failed: {response.StatusCode}\n{errorContent}", "Login Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
-                }
-            }
-            catch (TaskCanceledException)
-            {
-                System.Diagnostics.Debug.WriteLine("DEBUG: TryLoginAsync - Request timeout");
-                MessageBox.Show("Login request timed out. Is the API server running at " + ConfigManager.BaseUrl + "?", "Timeout", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-            catch (HttpRequestException ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - Network error: {ex.Message}");
-                MessageBox.Show($"Network error: {ex.Message}\n\nCheck that API is running at: {ConfigManager.BaseUrl}", "Network Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            catch (JsonException ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - JSON parsing error: {ex.Message}");
-                MessageBox.Show($"Invalid JSON response from server: {ex.Message}", "JSON Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"DEBUG: TryLoginAsync - Unexpected error: {ex.GetType().Name} - {ex.Message}");
-                MessageBox.Show($"Unexpected error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-
-            return false;
         }
     }
 }
