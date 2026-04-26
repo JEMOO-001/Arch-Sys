@@ -20,17 +20,18 @@ interface EditModalProps {
   isOpen: boolean;
   onClose: () => void;
   record: MapRecord | null;
-  onSave: (id: number, data: any) => Promise<void>;
+  onSave: () => void;
+  onRecordChange: (record: MapRecord | null) => void;
 }
 
-export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, onSave }) => {
+export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, onSave, onRecordChange }) => {
   const [formData, setFormData] = useState<Partial<MapRecord>>({});
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (record) {
       setFormData({
-        status: record.status,
+        status: record.status || 'In Progress',
         comment: record.comment || '',
         income_num: record.income_num || '',
         outcome_num: record.outcome_num || '',
@@ -38,13 +39,23 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
     }
   }, [record]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!record) return;
     
     setIsSaving(true);
     try {
-      await onSave(record.map_id, formData);
+      // Pass only the formData values, not the original record
+      const updatedRecord = {
+        ...record,
+        status: formData.status || record.status,
+        comment: formData.comment,
+        income_num: formData.income_num,
+        outcome_num: formData.outcome_num,
+      };
+      console.log('EditModal submitting:', updatedRecord);
+      onRecordChange(updatedRecord);
+      onSave();
       onClose();
     } finally {
       setIsSaving(false);
@@ -57,12 +68,12 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
         <div className="grid grid-cols-2 gap-4">
           <Input
             label="Income Number"
-            value={formData.income_num}
+            value={formData.income_num || ''}
             onChange={(e) => setFormData({ ...formData, income_num: e.target.value })}
           />
           <Input
             label="Outcome Number"
-            value={formData.outcome_num}
+            value={formData.outcome_num || ''}
             onChange={(e) => setFormData({ ...formData, outcome_num: e.target.value })}
           />
         </div>
@@ -71,7 +82,7 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
           <label className="text-sm font-medium text-gray-700">Status</label>
           <select
             className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.status}
+            value={formData.status || 'In Progress'}
             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
           >
             <option value="Not Started">Not Started</option>
@@ -86,7 +97,7 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
           <textarea
             className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             rows={3}
-            value={formData.comment}
+            value={formData.comment || ''}
             onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
           />
         </div>

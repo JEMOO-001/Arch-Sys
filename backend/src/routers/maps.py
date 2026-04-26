@@ -107,17 +107,21 @@ async def update_map(
     if current_user.role == "analyst" and db_map.analyst_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to edit this record")
     
-    update_data = map_in.model_dump(exclude_unset=True)
-    changes = {}
-    for field, new_val in update_data.items():
-        old_val = getattr(db_map, field)
-        if old_val != new_val:
-            changes[field] = (old_val, new_val)
-            setattr(db_map, field, new_val)
+    update_data = map_in.model_dump()  # Include all fields, even None
+    print(f"DEBUG: update_data = {update_data}")  # Add debug logging
     
-    if changes:
-        await log_multiple_changes(db, map_id, current_user.user_id, changes)
+    # For update, ALWAYS update fields that are provided (not skip if same value)
+    # This ensures changes are persisted even if value is same
+    for field, new_val in update_data.items():
+        if new_val is not None:  # Only update if value is provided and not null
+            old_val = getattr(db_map, field)
+            setattr(db_map, field, new_val)
+            print(f"DEBUG: {field} set from {old_val} to {new_val}")
+    
+    # Always commit if we have fields to update
+    if any(v is not None for v in update_data.values()):
         await db.commit()
         await db.refresh(db_map)
+        print(f"DEBUG: Committed. New status: {db_map.status}, comment: {db_map.comment}")
         
     return db_map
