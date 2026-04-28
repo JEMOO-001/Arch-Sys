@@ -20,6 +20,7 @@ async def get_summary_stats(
     
     stats = {
         "total": sum(r[1] for r in rows),
+        "notStarted": next((r[1] for r in rows if r[0] == "Not Started"), 0),
         "inProgress": next((r[1] for r in rows if r[0] == "In Progress"), 0),
         "complete": next((r[1] for r in rows if r[0] == "Complete"), 0),
         "onHold": next((r[1] for r in rows if r[0] == "On Hold"), 0)

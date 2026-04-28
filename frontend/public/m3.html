@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Connect - Forest Green</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(160deg, #f5f5dc 0%, #e8f5e9 50%, #c8e6c9 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 44px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 30px 60px rgba(45,106,79,0.2);
+        }
+        .logo { text-align: center; margin-bottom: 32px; }
+        .logo-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #2d6a4f, #40916c);
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 18px;
+            border: 4px solid #d8f3dc;
+        }
+        .logo h1 { color: #1b4332; font-size: 26px; font-weight: 700; }
+        .logo p { color: #40916c; font-size: 14px; margin-top: 5px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; color: #1b4332; font-size: 14px; margin-bottom: 8px; font-weight: 600; }
+        .form-group input {
+            width: 100%;
+            padding: 15px 17px;
+            border: 2px solid #d8f3dc;
+            border-radius: 10px;
+            background: #f8fafc;
+            color: #1b4332;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+        .form-group input:focus { outline: none; border-color: #2d6a4f; box-shadow: 0 0 0 4px rgba(45,106,79,0.15); }
+        .btn {
+            width: 100%;
+            padding: 17px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #2d6a4f, #40916c);
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 12px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(45,106,79,0.35); }
+        .status { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; padding: 13px; border-radius: 10px; background: #ecfdf5; border: 1px solid #d1fae5; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; }
+        .status-text { color: #059669; font-size: 13px; font-weight: 500; }
+        .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <div class="logo-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            </div>
+            <h1>Sentinel</h1>
+            <p>Enterprise GIS Archiving</p>
+        </div>
+        <div class="status">
+            <div class="status-dot"></div>
+            <span class="status-text">Server is online</span>
+        </div>
+        <form>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" placeholder="Enter your username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" placeholder="Enter your password">
+            </div>
+            <button class="btn">Connect</button>
+        </form>
+        <div class="footer">Sentinel v1.0 | Forest Green</div>
+    </div>
+</body>
+</html>

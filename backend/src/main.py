@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import users, maps, proxy, stats, auth
+from .routers import users, maps, proxy, stats, auth, categories
 from .core.config import settings
 
 app = FastAPI(title="Sentinel API", version="1.0.0")
@@ -21,6 +21,7 @@ app.include_router(users.router)
 app.include_router(maps.router)
 app.include_router(proxy.router)
 app.include_router(stats.router)
+app.include_router(categories.router)
 
 @app.get("/health")
 async def health_check():

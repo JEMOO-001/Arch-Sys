@@ -4,15 +4,11 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             d:DesignHeight="320" d:DesignWidth="280"
-             Background="{DynamicResource Esri_BackgroundPressedBrush}">
+             d:DesignHeight="280" d:DesignWidth="320"
+             Background="#111827">
 
-    <Grid Margin="14">
+    <Grid Margin="20">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -20,54 +16,48 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
+        <!-- Header with Status -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
+            <Border Width="40" Height="40" Background="rgba(34,211,238,0.1)" CornerRadius="8" Margin="0,0,12,0" BorderBrush="#22d3ee" BorderThickness="1">
+                <TextBlock Text="S" FontSize="18" FontWeight="Bold" Foreground="#22d3ee" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Sentinel" FontSize="16" FontWeight="SemiBold" Foreground="#f0f9ff"/>
+                <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#22d3ee"/>
+            </StackPanel>
+        </StackPanel>
+
         <!-- Status Indicator -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,14">
-            <Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center">
-                <Ellipse.Style>
-                    <Style TargetType="Ellipse">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding StatusColor}" Value="Green">
-                                <Setter Property="Fill" Value="#4CAF50"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding StatusColor}" Value="Red">
-                                <Setter Property="Fill" Value="#F44336"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding StatusColor}" Value="Orange">
-                                <Setter Property="Fill" Value="#FF9800"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding StatusColor}" Value="Gray">
-                                <Setter Property="Fill" Value="#9E9E9E"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Ellipse.Style>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,16">
+            <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
+                <Ellipse.Fill>
+                    <SolidColorBrush Color="#22d3ee"/>
+                </Ellipse.Fill>
+                <Ellipse.Effect>
+                    <DropShadowEffect Color="#22d3ee" BlurRadius="6" ShadowDepth="0"/>
+                </Ellipse.Effect>
             </Ellipse>
-            <TextBlock Text="{Binding StatusText}" FontSize="11"
-                       Foreground="{DynamicResource Esri_TextControlBrush}"
-                       TextWrapping="Wrap" MaxWidth="230"/>
+            <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#22d3ee" VerticalAlignment="Center"/>
         </StackPanel>
 
         <!-- Username -->
-        <TextBlock Grid.Row="1" Text="User Name:" Margin="0,0,0,4"
-                   Foreground="{DynamicResource Esri_TextControlBrush}" FontWeight="SemiBold"/>
-        <TextBox Grid.Row="2" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
-                 Padding="6,4" Margin="0,0,0,10"
-                 Style="{DynamicResource Esri_TextBoxStyle}"/>
+        <StackPanel Grid.Row="2" Margin="0,0,0,12">
+            <TextBlock Text="USERNAME" FontSize="10" Foreground="#64748b" Margin="0,0,0,6" FontWeight="SemiBold"/>
+            <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                     Padding="12,10" Background="#0d1117" Foreground="#f0f9ff" BorderBrush="#334155"
+                     BorderThickness="1" CaretBrush="#22d3ee"/>
+        </StackPanel>
 
         <!-- Password -->
-        <TextBlock Grid.Row="3" Text="Password:" Margin="0,0,0,4"
-                   Foreground="{DynamicResource Esri_TextControlBrush}" FontWeight="SemiBold"/>
-        <PasswordBox Grid.Row="4" x:Name="PasswordBox" Padding="6,4" Margin="0,0,0,14"
-                     PasswordChanged="PasswordBox_PasswordChanged"/>
-
-        <!-- Buttons -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
-            <Button Content="Test Connection" Command="{Binding TestConnectionCommand}"
-                    Padding="10,5" Margin="0,0,8,0"
-                    Style="{DynamicResource Esri_ButtonStyleBorderless}"/>
-            <Button Content="Log In" Command="{Binding LoginCommand}"
-                    Padding="14,5" FontWeight="SemiBold"
-                    Style="{DynamicResource Esri_ButtonStyle}"/>
+        <StackPanel Grid.Row="3" Margin="0,0,0,16">
+            <TextBlock Text="PASSWORD" FontSize="10" Foreground="#64748b" Margin="0,0,0,6" FontWeight="SemiBold"/>
+            <PasswordBox x:Name="PasswordBox" Padding="12,10" Background="#0d1117" Foreground="#f0f9ff" BorderBrush="#334155" BorderThickness="1"
+                         PasswordChanged="PasswordBox_PasswordChanged"/>
         </StackPanel>
+
+        <!-- Button -->
+        <Button Grid.Row="4" Content="CONNECT" Command="{Binding LoginCommand}"
+                Padding="16,12" FontWeight="SemiBold" Background="#0891b2" Foreground="White"
+                BorderThickness="0" Cursor="Hand" VerticalAlignment="Top"/>
     </Grid>
 </UserControl>

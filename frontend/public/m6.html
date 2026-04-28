@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Connect - Slate Gray</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'SF Pro Display', -apple-system, sans-serif;
+            background: #0f172a;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 20px 40px rgba(0,0,0,0.4);
+        }
+        .logo { text-align: center; margin-bottom: 28px; }
+        .logo-icon {
+            width: 56px;
+            height: 56px;
+            background: #334155;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .logo h1 { color: #f8fafc; font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
+        .logo p { color: #64748b; font-size: 13px; margin-top: 4px; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; color: #94a3b8; font-size: 13px; margin-bottom: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            background: #0f172a;
+            color: #f8fafc;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .form-group input:focus { outline: none; border-color: #64748b; background: #1e293b; }
+        .form-group input::placeholder { color: #475569; }
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 10px;
+            background: #f8fafc;
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+        .btn:hover { background: #e2e8f0; }
+        .status { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; padding: 12px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+        .status-text { color: #94a3b8; font-size: 12px; }
+        .footer { text-align: center; margin-top: 20px; font-size: 11px; color: #475569; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <div class="logo-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="#94a3b8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
+            <h1>Sentinel</h1>
+            <p>Enterprise GIS Archiving</p>
+        </div>
+        <div class="status">
+            <div class="status-dot"></div>
+            <span class="status-text">Server is online</span>
+        </div>
+        <form>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" placeholder="Enter your username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" placeholder="Enter your password">
+            </div>
+            <button class="btn">Connect</button>
+        </form>
+        <div class="footer">Sentinel v1.0 | Slate Gray</div>
+    </div>
+</body>
+</html>

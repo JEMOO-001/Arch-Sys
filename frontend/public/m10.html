@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Connect - Golden Hour</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: radial-gradient(ellipse at top, #1c1917 0%, #0c0a09 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: #1c1917;
+            border-radius: 50%;
+            padding: 64px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 0 80px rgba(251,191,36,0.1), inset 0 0 60px rgba(251,191,36,0.03);
+            border: 1px solid rgba(251,191,36,0.1);
+        }
+        .logo { text-align: center; margin-bottom: 30px; }
+        .logo-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            box-shadow: 0 0 30px rgba(251,191,36,0.4);
+        }
+        .logo h1 { color: #fef3c7; font-size: 20px; font-weight: 700; letter-spacing: 3px; }
+        .logo p { color: #d97706; font-size: 11px; margin-top: 4px; letter-spacing: 1px; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; color: #a8a29e; font-size: 12px; margin-bottom: 8px; font-weight: 500; letter-spacing: 0.5px; }
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #44403c;
+            border-radius: 50px;
+            background: #0c0a09;
+            color: #fef3c7;
+            font-size: 14px;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .form-group input:focus { outline: none; border-color: #fbbf24; box-shadow: 0 0 20px rgba(251,191,36,0.2); }
+        .form-group input::placeholder { color: #57534e; }
+        .form-group input::placeholder { text-align: center; }
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: #0c0a09;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .btn:hover { transform: scale(1.02); box-shadow: 0 0 30px rgba(251,191,36,0.5); }
+        .status { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 22px; padding: 10px; border-radius: 50px; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.2); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 10px #fbbf24; }
+        .status-text { color: #d97706; font-size: 11px; font-weight: 500; }
+        .footer { text-align: center; margin-top: 22px; font-size: 10px; color: #57534e; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <div class="logo-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="#0c0a09"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h4M18 12h4M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+            </div>
+            <h1>Sentinel</h1>
+            <p>Enterprise GIS Archiving</p>
+        </div>
+        <div class="status">
+            <div class="status-dot"></div>
+            <span class="status-text">Server is online</span>
+        </div>
+        <form>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" placeholder="Enter your username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" placeholder="Enter your password">
+            </div>
+            <button class="btn">Connect</button>
+        </form>
+        <div class="footer">Sentinel v1.0 | Golden Hour</div>
+    </div>
+</body>
+</html>

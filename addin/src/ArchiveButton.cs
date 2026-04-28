@@ -120,15 +120,16 @@ namespace ArcLayoutSentinel
 
                 string layoutName = _currentDialog?.SelectedLayout ?? "";
                 string categoryPrefix = _currentDialog?.CategoryPrefix ?? "";
-                string clientName = _currentDialog?.ClientName ?? "";
-                string projectCode = _currentDialog?.ProjectCode ?? "";
                 string category = _currentDialog?.Category ?? "";
                 string exportFormat = _currentDialog?.ExportFormat ?? "PDF";
                 string projectUri = layoutInfo?.ProjectUri ?? "";
+                // Extract project name from .aprx file path (e.g., "C:\...\Test\Test.aprx" -> "Test")
+                string projectName = string.IsNullOrEmpty(projectUri) ? "" : 
+                    System.IO.Path.GetFileNameWithoutExtension(projectUri);
 
-                Logger.Info("Archiving Layout: {LayoutName}, Prefix: {Prefix}, Client: {Client}", layoutName, categoryPrefix, clientName);
+                Logger.Info("Archiving Layout: {LayoutName}, Prefix: {Prefix}, Project: {Project}", layoutName, categoryPrefix, projectName);
 
-                await ExecuteArchiveAsync(layoutName, categoryPrefix, clientName, projectCode, category, exportFormat, projectUri);
+                await ExecuteArchiveAsync(layoutName, categoryPrefix, projectName, category, exportFormat, projectUri);
 
                 Logger.Info("ArchiveButton.OnClick completed successfully");
             }
@@ -155,8 +156,8 @@ namespace ArcLayoutSentinel
             _currentDialog = null;
         }
 
-        private async Task ExecuteArchiveAsync(string layoutName, string categoryPrefix, string clientName,
-            string projectCode, string category, string exportFormat, string projectUri)
+        private async Task ExecuteArchiveAsync(string layoutName, string categoryPrefix, string projectName, 
+            string category, string exportFormat, string projectUri)
         {
             string exportedFilePath = null;
             string uniqueId = null;
@@ -177,7 +178,7 @@ namespace ArcLayoutSentinel
                 string destinationFolder = ArchivalService.GenerateDestinationFolder(archiveRoot, category);
                 string ext = exportFormat.ToLowerInvariant() == "jpeg" ? "jpeg" : "pdf";
 
-                string fileName = ArchivalService.GenerateFileName(uniqueId, clientName, projectCode, ext);
+                string fileName = ArchivalService.GenerateFileName(uniqueId, projectName, ext);
                 exportedFilePath = System.IO.Path.Combine(destinationFolder, fileName);
 
                 System.IO.Directory.CreateDirectory(destinationFolder);
@@ -202,8 +203,7 @@ namespace ArcLayoutSentinel
                     unique_id = uniqueId,
                     layout_name = layoutName,
                     project_path = projectUri,
-                    project_code = projectCode,
-                    client_name = clientName,
+                    project_name = projectName,
                     category = category,
                     status = "In Progress",
                     file_path = exportedFilePath,

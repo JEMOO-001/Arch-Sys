@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "gis-archiving": {
+      "source": "D:\\claudeCode CLI\\open-claude-code\\GIS Archiving Sys\\gis-archiving",
+      "sourceType": "local",
+      "computedHash": "3db36489622eef23df8a14fc5d55909f8483771070a438eda3d26ab8849319af"
+    }
+  }
+}

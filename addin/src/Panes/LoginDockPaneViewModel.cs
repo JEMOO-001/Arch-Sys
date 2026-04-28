@@ -6,6 +6,7 @@ using System.Windows.Input;
 using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
 using ArcLayoutSentinel.Services;
+using System.Diagnostics;
 
 namespace ArcLayoutSentinel.Panes
 {
@@ -15,6 +16,7 @@ namespace ArcLayoutSentinel.Panes
 
         public LoginDockPaneViewModel()
         {
+            Logger.Debug("=== LoginDockPaneViewModel Constructor ===");
             // Ensure config is loaded even if InitializeAsync doesn't fire
             ConfigManager.Load();
         }
@@ -67,6 +69,7 @@ namespace ArcLayoutSentinel.Panes
 
         protected override async Task InitializeAsync()
         {
+            Logger.Debug("=== LoginDockPaneViewModel InitializeAsync ===");
             await base.InitializeAsync();
             ConfigManager.Load();
 
@@ -78,6 +81,7 @@ namespace ArcLayoutSentinel.Panes
 
         private async Task DoTestConnectionAsync()
         {
+            Logger.Debug("=== DoTestConnectionAsync ===");
             IsTestEnabled = false;
             StatusText = "Testing connection...";
             StatusColor = "Orange";
@@ -89,17 +93,20 @@ namespace ArcLayoutSentinel.Panes
                 {
                     StatusColor = "Green";
                     StatusText = "Server online";
+                    Logger.Info("Server is reachable");
                 }
                 else
                 {
                     StatusColor = "Red";
                     StatusText = $"Unreachable: {error}";
+                    Logger.Warn("Server unreachable: {Error}", error);
                 }
             }
             catch (Exception ex)
             {
                 StatusColor = "Red";
                 StatusText = $"Error: {ex.Message}";
+                Logger.Error(ex, "DoTestConnectionAsync ERROR");
             }
             finally
             {
@@ -109,6 +116,7 @@ namespace ArcLayoutSentinel.Panes
 
         private async Task DoLoginAsync()
         {
+            Logger.Info("=== DoLoginAsync for user {Username} ===", Username);
             if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
             {
                 StatusColor = "Red";
@@ -122,60 +130,33 @@ namespace ArcLayoutSentinel.Panes
 
             try
             {
-                using (var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) })
+                var (success, token, error) = await ApiService.LoginAsync(Username, Password);
+
+                if (success)
                 {
-                    var formData = new System.Collections.Generic.Dictionary<string, string>
-                    {
-                        { "username", Username },
-                        { "password", Password }
-                    };
-                    var content = new FormUrlEncodedContent(formData);
-                    var response = await client.PostAsync($"{ConfigManager.BaseUrl}/auth/login", content);
+                    ConfigManager.ApiToken = token;
+                    ConfigManager.LastUsername = Username;
+                    ConfigManager.Save();
 
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var json = await response.Content.ReadAsStringAsync();
-                        using (var doc = JsonDocument.Parse(json))
-                        {
-                            if (doc.RootElement.TryGetProperty("access_token", out var tokenElement))
-                            {
-                                ConfigManager.ApiToken = tokenElement.GetString();
-                                ConfigManager.LastUsername = Username;
-                                ConfigManager.Save();
+                    Module1.Current.SetLoggedInState(true);
 
-                                Module1.Current.SetLoggedInState(true);
-
-                                StatusColor = "Green";
-                                StatusText = $"Connected as {Username}";
-                                Password = "";
-                                return;
-                            }
-                        }
-                        StatusColor = "Red";
-                        StatusText = "Invalid server response (no token).";
-                    }
-                    else
-                    {
-                        var errorContent = await response.Content.ReadAsStringAsync();
-                        StatusColor = "Red";
-                        StatusText = $"Login failed: {response.StatusCode}";
-                    }
+                    StatusColor = "Green";
+                    StatusText = $"Connected as {Username}";
+                    Password = "";
+                    Logger.Info("Login successful via ApiService for {Username}", Username);
                 }
-            }
-            catch (TaskCanceledException)
-            {
-                StatusColor = "Red";
-                StatusText = "Timeout - is the server running?";
-            }
-            catch (HttpRequestException ex)
-            {
-                StatusColor = "Red";
-                StatusText = $"Network error: {ex.Message}";
+                else
+                {
+                    StatusColor = "Red";
+                    StatusText = error;
+                    Logger.Warn("Login failed for {Username}: {Error}", Username, error);
+                }
             }
             catch (Exception ex)
             {
                 StatusColor = "Red";
                 StatusText = $"Error: {ex.Message}";
+                Logger.Error(ex, "DoLoginAsync ERROR");
             }
             finally
             {
@@ -183,19 +164,35 @@ namespace ArcLayoutSentinel.Panes
             }
         }
 
-        internal static void Show()
+        public static void Show()
         {
-            // Find and activate the dock pane
-            var pane = FrameworkApplication.DockPaneManager.Find(_dockPaneID);
-            if (pane != null)
+            Logger.Debug("=== LoginDockPaneViewModel.Show() - Looking for pane ID: {PaneID} ===", _dockPaneID);
+
+            try
             {
-                pane.Activate();
+                var pane = FrameworkApplication.DockPaneManager.Find(_dockPaneID);
+
+                if (pane != null)
+                {
+                    Logger.Debug("Pane found! Activating...");
+                    pane.Activate();
+                }
+                else
+                {
+                    Logger.Error("ERROR: DockPane '{PaneID}' not found!", _dockPaneID);
+                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                        $"DockPane '{_dockPaneID}' could not be found.\n\n" +
+                        "Verify Config.daml registration and that the pane ID matches.\n\n" +
+                        "Expected ID: " + _dockPaneID,
+                        "Sentinel Error");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // If not found, it means the dock pane is not properly registered in Config.daml
-                throw new InvalidOperationException(
-                    $"DockPane '{_dockPaneID}' not found. Check Config.daml registration.");
+                Logger.Error(ex, "ERROR in Show()");
+                ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                    $"Error showing DockPane:\n{ex.Message}\n\n{ex.StackTrace}",
+                    "Sentinel Critical Error");
             }
         }
     }

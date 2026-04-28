@@ -19,15 +19,23 @@ namespace ArcLayoutSentinel.Dialogs
                 return LayoutComboBox.SelectedItem?.ToString() ?? "";
             }
         }
-        public string ProjectCode => ProjectCodeTextBox.Text.Trim();
-        public string ClientName => ClientTextBox.Text.Trim();
-        public string Category => CategoryTextBox.Text.Trim();
-        public string CategoryPrefix => CategoryPrefixTextBox.Text.Trim().ToUpperInvariant();
+        public string Category 
+        {
+            get
+            {
+                var selected = CategoryComboBox.SelectedItem?.ToString();
+                if (string.IsNullOrEmpty(selected))
+                    return "";
+                return selected;
+            }
+        }
+        public string CategoryPrefix { get; private set; }
         public string ExportFormat => (ExportFormatComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "PDF";
 
         private PreFlightService.PreFlightResult _lastPreFlightResult;
         private List<string> _layoutNames;
         private string _activeLayoutName;
+        private List<CategoryInfo> _categories;
 
         public ArchiveMetadataDialog(List<string> layoutNames, string activeLayoutName)
         {
@@ -36,6 +44,7 @@ namespace ArcLayoutSentinel.Dialogs
 
             _layoutNames = layoutNames;
             _activeLayoutName = activeLayoutName;
+            _categories = new List<CategoryInfo>();
 
             if (layoutNames != null)
             {
@@ -46,7 +55,44 @@ namespace ArcLayoutSentinel.Dialogs
                 LayoutComboBox.Items.Insert(0, activeLayoutName);
             if (LayoutComboBox.Items.Count > 0) LayoutComboBox.SelectedIndex = 0;
 
+            _ = LoadCategoriesAsync();
             _ = RunPreFlightCheckAsync();
+        }
+
+        private async System.Threading.Tasks.Task LoadCategoriesAsync()
+        {
+            try
+            {
+                _categories = await ApiService.GetCategoriesAsync();
+                foreach (var cat in _categories)
+                {
+                    CategoryComboBox.Items.Add(cat.name);
+                }
+                if (CategoryPlaceholder != null)
+                    CategoryPlaceholder.Visibility = Visibility.Visible;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to load categories: {ex.Message}");
+            }
+        }
+
+        private void CategoryComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CategoryPlaceholder != null)
+            {
+                CategoryPlaceholder.Visibility = CategoryComboBox.SelectedItem != null ? Visibility.Collapsed : Visibility.Visible;
+            }
+            
+            var selectedItem = CategoryComboBox.SelectedItem;
+            if (selectedItem is string selectedName)
+            {
+                var cat = _categories.Find(c => c.name == selectedName);
+                if (cat != null)
+                {
+                    CategoryPrefix = cat.prefix;
+                }
+            }
         }
 
         private async System.Threading.Tasks.Task RunPreFlightCheckAsync()
@@ -103,16 +149,9 @@ namespace ArcLayoutSentinel.Dialogs
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(ProjectCodeTextBox.Text) || string.IsNullOrWhiteSpace(ClientTextBox.Text) ||
-                string.IsNullOrWhiteSpace(CategoryTextBox.Text) || string.IsNullOrWhiteSpace(CategoryPrefixTextBox.Text))
+            if (string.IsNullOrWhiteSpace(Category))
             {
-                MessageBox.Show("All fields are required.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (!Regex.IsMatch(CategoryPrefixTextBox.Text, @"^[A-Z]{2}$"))
-            {
-                MessageBox.Show("Category Prefix must be exactly 2 uppercase letters (A-Z).", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Please select a category.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -128,5 +167,9 @@ namespace ArcLayoutSentinel.Dialogs
         }
 
         public PreFlightService.PreFlightResult GetPreFlightResult() => _lastPreFlightResult;
+
+        private void LayoutComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+        }
     }
 }

@@ -1,0 +1,179 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Connect - Ocean Blue</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f8ff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo-icon {
+            width: 60px;
+            height: 60px;
+            background: #0077b6;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .logo-icon svg {
+            width: 32px;
+            height: 32px;
+            fill: white;
+        }
+        .logo h1 {
+            color: #333;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .logo p {
+            color: #0077b6;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            color: #333;
+            font-size: 14px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid transparent;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.05);
+            color: #333;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #0077b6;
+            background: #ffffff;
+        }
+        .form-group input::placeholder {
+            color: rgba(#333, 0.4);
+        }
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 10px;
+            background: #023e8a;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -5px #023e8a;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 12px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.05);
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #22c55e;
+        }
+        .status-text {
+            color: #333;
+            font-size: 13px;
+            opacity: 0.7;
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 25px 0;
+            color: #333;
+            opacity: 0.3;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: currentColor;
+        }
+        .divider span {
+            padding: 0 15px;
+            font-size: 12px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 25px;
+            font-size: 12px;
+            color: #333;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
+            <h1>Sentinel</h1>
+            <p>Enterprise GIS Archiving</p>
+        </div>
+        
+        <div class="status">
+            <div class="status-dot"></div>
+            <span class="status-text">Server is online</span>
+        </div>
+        
+        <form onsubmit="event.preventDefault();">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" placeholder="Enter your username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" placeholder="Enter your password">
+            </div>
+            <button class="btn">Connect</button>
+        </form>
+        
+        <div class="footer">
+            Sentinel v1.0 | Clean blue ocean theme
+        </div>
+    </div>
+</body>
+</html>

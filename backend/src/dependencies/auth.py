@@ -64,3 +64,20 @@ def require_role(allowed_roles: list[str]):
             )
         return current_user
     return role_checker
+
+def verify_token(token: str) -> Optional[TokenData]:
+    """Verify token directly without FastAPI Depends - for query param auth"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str = payload.get("sub")
+        role: str = payload.get("role")
+        user_id: int = payload.get("user_id")
+        if username is None:
+            return None
+        return TokenData(username=username, role=role, user_id=user_id)
+    except JWTError:
+        return None

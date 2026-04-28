@@ -1,41 +1,75 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- Target net8.0 for Pro 3.3/3.4. Change to net6.0 for Pro 3.0-3.2 -->
-    <TargetFramework>net8.0-windows10.0.18362.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <OutputType>Library</OutputType>
-    <UseWPF>true</UseWPF>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="ArcGIS.Desktop.Framework">
       <HintPath>C:\Program Files\ArcGIS\Pro\bin\ArcGIS.Desktop.Framework.dll</HintPath>
+      <CopyLocal>False</CopyLocal>
       <Private>False</Private>
     </Reference>
     <Reference Include="ArcGIS.Core">
       <HintPath>C:\Program Files\ArcGIS\Pro\bin\ArcGIS.Core.dll</HintPath>
+      <CopyLocal>False</CopyLocal>
       <Private>False</Private>
     </Reference>
     <Reference Include="ArcGIS.Desktop.Layouts">
       <HintPath>C:\Program Files\ArcGIS\Pro\bin\Extensions\Layout\ArcGIS.Desktop.Layouts.dll</HintPath>
+      <CopyLocal>False</CopyLocal>
       <Private>False</Private>
     </Reference>
     <Reference Include="ArcGIS.Desktop.Core">
       <HintPath>C:\Program Files\ArcGIS\Pro\bin\Extensions\Core\ArcGIS.Desktop.Core.dll</HintPath>
+      <CopyLocal>False</CopyLocal>
       <Private>False</Private>
     </Reference>
     <Reference Include="ArcGIS.Desktop.Mapping">
       <HintPath>C:\Program Files\ArcGIS\Pro\bin\Extensions\Mapping\ArcGIS.Desktop.Mapping.dll</HintPath>
+      <CopyLocal>False</CopyLocal>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="src\Config.daml">
+    <Content Include="Config.daml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog" Version="4.3.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+
+  <Target Name="PackageAddIn" AfterTargets="Build">
+    <PropertyGroup>
+      <StagingDir>$(OutputPath)staging</StagingDir>
+      <InstallDir>$(StagingDir)\Install</InstallDir>
+      <AddInFile>$(OutputPath)$(AssemblyName).esriAddInX</AddInFile>
+      <TempZip>$(OutputPath)temp.zip</TempZip>
+    </PropertyGroup>
+    <RemoveDir Directories="$(StagingDir)" />
+    <MakeDir Directories="$(StagingDir)" />
+    <MakeDir Directories="$(InstallDir)" />
+    <ItemGroup>
+      <AddInDlls Include="$(OutputPath)*.dll" Exclude="$(OutputPath)Microsoft.Windows.SDK.NET.dll;$(OutputPath)WinRT.Runtime.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(AddInDlls)" DestinationFolder="$(InstallDir)" />
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).deps.json" DestinationFolder="$(InstallDir)" />
+    <Copy SourceFiles="$(ProjectDir)Config.daml" DestinationFiles="$(StagingDir)\Config.daml" />
+    <Delete Files="$(AddInFile)" />
+    <Delete Files="$(TempZip)" />
+    
+    <!-- Use PowerShell to create proper ZIP using .NET -->
+    <Exec Command="powershell -Command &quot;Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('$(StagingDir)', '&quot;$(TempZip)&quot;')&quot;" />
+    <Move SourceFiles="$(TempZip)" DestinationFiles="$(AddInFile)" />
+    <Message Text="Packaged add-in: $(AddInFile)" Importance="high" />
+  </Target>
 </Project>

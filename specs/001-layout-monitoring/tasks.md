@@ -38,7 +38,7 @@
 - [x] T012 Configure environment management (`.env`, `config.py`) in `backend/` and `frontend/`
 - [ ] T012a [Stability] Setup **Structured Logging** (Serilog for C#, JSON for Python) in `addin/` and `backend/`
 - [ ] T012b [Stability] Implement **Atomic Transaction** wrapper (SQL record + File system move) in `backend/services/`
-- [ ] T012c [Stability] Refactor **ConnectButton** and **LoginDialog** (Zero-SDK pattern) to resolve UI freezes
+- [x] T012c [Stability] Refactor **ConnectButton** and **LoginDialog** (Zero-SDK pattern) to resolve UI freezes
 
 **Checkpoint**: Foundation & Login ready - Terminal test `test_login_api.py` must pass.
 

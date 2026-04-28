@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Database, Settings, LogOut } from 'lucide-react';
+import { Database, LogOut, LayoutGrid, BarChart3 } from 'lucide-react';
 import { MapTable } from '../components/MapTable';
 import { SummaryCards } from '../components/SummaryCards';
 import { AnalystStats } from '../components/AnalystStats';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
-import { FileViewer } from '../components/FileViewer';
 import { EditModal } from '../components/EditModal';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
@@ -15,6 +14,7 @@ const API_URL = 'http://localhost:8000';
 
 interface Stats {
   total: number;
+  notStarted: number;
   inProgress: number;
   complete: number;
   onHold: number;
@@ -32,8 +32,8 @@ interface MapRecord {
   map_id: number;
   unique_id: string;
   layout_name: string;
-  project_code: string;
-  client_name: string;
+  project_path: string;
+  project_name: string;
   status: string;
   created_at: string;
   analyst_id: number;
@@ -41,15 +41,18 @@ interface MapRecord {
   comment?: string;
   income_num?: string;
   outcome_num?: string;
+  to_whom?: string;
 }
 
 export const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [stats, setStats] = useState<Stats>({ total: 0, inProgress: 0, complete: 0, onHold: 0 });
+  const [currentView, setCurrentView] = useState<'monitor' | 'summary'>('monitor');
+  const [stats, setStats] = useState<Stats>({ total: 0, notStarted: 0, inProgress: 0, complete: 0, onHold: 0 });
   const [analysts, setAnalysts] = useState<Analyst[]>([]);
   const [maps, setMaps] = useState<MapRecord[]>([]);
   const [search, setSearch] = useState('');
+  const [searchField, setSearchField] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
 
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -88,12 +91,15 @@ export const Dashboard: React.FC = () => {
     fetchData();
   }, [token, isAdmin]);
 
-  const handleSearch = async () => {
+const handleSearch = async () => {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       const res = await axios.get(`${API_URL}/maps/`, { 
         headers,
-        params: { search: search || undefined }
+        params: { 
+          search: search || undefined,
+          search_field: searchField || 'all'
+        }
       });
       setMaps(res.data);
     } catch (err) {
@@ -101,11 +107,42 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleView = (mapId: number) => {
-    const record = maps.find(m => m.map_id === mapId);
-    setViewerMapId(mapId);
-    setViewerUniqueId(record?.unique_id || null);
-    setViewerOpen(true);
+  const handleViewNewTab = (record: MapRecord) => {
+    const token = localStorage.getItem('token');
+    window.open(`${API_URL}/proxy/file/${record.map_id}?token=${token}&mode=inline`, '_blank');
+  };
+
+  const handleDownload = async (record: MapRecord) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/proxy/file/${record.map_id}?mode=attachment`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to download');
+      }
+      
+      const contentType = response.headers.get('content-type') || 'application/pdf';
+      const blob = await response.blob();
+      const ext = contentType.includes('jpeg') || contentType.includes('image') ? 'jpeg' : 'pdf';
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${record.unique_id}.${ext}`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(url), 500);
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('Download failed. Please try View → Open in New Tab instead.');
+    }
   };
 
   const handleEdit = (record: MapRecord) => {
@@ -129,6 +166,7 @@ export const Dashboard: React.FC = () => {
         comment: editRecordForModal.comment,
         income_num: editRecordForModal.income_num,
         outcome_num: editRecordForModal.outcome_num,
+        to_whom: editRecordForModal.to_whom,
       });
       
       const res = await axios.patch(`${API_URL}/maps/${editRecordForModal.map_id}`, {
@@ -136,6 +174,7 @@ export const Dashboard: React.FC = () => {
         comment: editRecordForModal.comment,
         income_num: editRecordForModal.income_num,
         outcome_num: editRecordForModal.outcome_num,
+        to_whom: editRecordForModal.to_whom,
       }, { headers });
       
       console.log('API Response:', res.data);
@@ -176,13 +215,27 @@ export const Dashboard: React.FC = () => {
         className="flex flex-col border-r border-gray-200 bg-white shadow-sm"
       >
         <div className="flex h-16 items-center border-b border-gray-200 px-6">
-          <Database className="h-8 w-8 text-blue-600" />
+          <Database className="h-8 w-8 text-blue-600 shrink-0" />
           {isSidebarOpen && <span className="ml-3 font-bold text-gray-900 tracking-tight text-xl">Sentinel</span>}
         </div>
         
         <nav className="flex-1 space-y-2 p-4">
-          <NavItem icon={Database} label="Dashboard" active isOpen={isSidebarOpen} />
-          <NavItem icon={Settings} label="Settings" isOpen={isSidebarOpen} />
+          <NavItem 
+            icon={LayoutGrid} 
+            label="Monitor" 
+            active={currentView === 'monitor'} 
+            isOpen={isSidebarOpen}
+            onClick={() => setCurrentView('monitor')}
+          />
+          {isAdmin && (
+            <NavItem 
+              icon={BarChart3} 
+              label="Summary" 
+              active={currentView === 'summary'} 
+              isOpen={isSidebarOpen}
+              onClick={() => setCurrentView('summary')}
+            />
+          )}
         </nav>
 
         <div className="border-t border-gray-200 p-4">
@@ -196,61 +249,79 @@ export const Dashboard: React.FC = () => {
         </div>
       </motion.aside>
 
-      <main className="flex-1 overflow-y-auto p-8">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-8 flex items-center justify-between">
+          {/* Header */}
+          <div className="mb-6 md:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Monitoring Overview</h1>
-              <p className="mt-1 text-gray-500">Welcome back, {user?.username}</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+                {currentView === 'monitor' ? 'Monitor' : 'Summary'}
+              </h1>
+              <p className="mt-1 text-gray-500 text-sm md:text-base">Welcome back, {user?.username}</p>
             </div>
-            <Button onClick={() => setIsSidebarOpen(!isSidebarOpen)} variant="secondary">
-              Toggle Sidebar
+            <Button onClick={() => setIsSidebarOpen(!isSidebarOpen)} variant="secondary" className="md:hidden">
+              Menu
             </Button>
           </div>
 
+          {/* Stats Cards */}
           <SummaryCards stats={stats} />
 
-          <div className="mt-12 grid grid-cols-1 gap-8 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-               <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">Recent Archives</h2>
-                  <div className="flex gap-4">
-                     <Input 
-                       placeholder="Search..." 
-                       className="w-64"
-                       value={search}
-                       onChange={(e) => setSearch(e.target.value)}
-                       onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                     />
-                     <Button variant="outline" onClick={handleSearch}>
-                       Search
-                     </Button>
-                  </div>
-               </div>
-               <MapTable 
-                 data={maps} 
-                 currentUserId={user?.user_id || 0} 
-                 userRole={user?.role || 'analyst'} 
-                 onView={handleView}
-                 onEdit={handleEdit}
-               />
-            </div>
-            
-            {isAdmin && (
-              <div>
-                <AnalystStats stats={analysts} />
+          {/* Main Content Area */}
+          <div className="mt-8 md:mt-12">
+            {currentView === 'monitor' ? (
+              /* Monitor View - Map Table */
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <h2 className="text-xl font-semibold text-gray-900">All Maps</h2>
+                  <div className="flex gap-2 md:gap-4 w-full md:w-auto">
+                      <select
+                        className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={searchField}
+                        onChange={(e) => setSearchField(e.target.value)}
+                      >
+                        <option value="all" hidden>All Fields</option>
+                        <option value="unique_id">ID</option>
+                        <option value="layout_name">Layout</option>
+                        <option value="project_name">Project</option>
+                        <option value="status">Status</option>
+                        <option value="to_whom">To Whom</option>
+                      </select>
+                      <Input 
+                        placeholder="Search..." 
+                        className="w-full md:w-64"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                      />
+                      <Button variant="outline" onClick={handleSearch} className="shrink-0">
+                        Search
+                      </Button>
+                    </div>
+                </div>
+                <MapTable 
+                  data={maps} 
+                  currentUserId={user?.user_id || 0} 
+                  userRole={user?.role || 'analyst'} 
+                  onViewNewTab={handleViewNewTab}
+                  onEdit={handleEdit}
+                  onDownload={handleDownload}
+                />
+              </div>
+            ) : (
+              /* Summary View - Full Analyst Stats */
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold text-gray-900">All Users Performance</h2>
+                {analysts.length > 0 ? (
+                  <AnalystStats stats={analysts} />
+                ) : (
+                  <p className="text-gray-500">No user data available.</p>
+                )}
               </div>
             )}
           </div>
         </div>
       </main>
-
-      <FileViewer 
-        isOpen={viewerOpen} 
-        onClose={() => setViewerOpen(false)} 
-        mapId={viewerMapId} 
-        uniqueId={viewerUniqueId} 
-      />
 
       <EditModal 
         isOpen={editOpen} 
@@ -263,10 +334,13 @@ export const Dashboard: React.FC = () => {
   );
 };
 
-const NavItem = ({ icon: Icon, label, active = false, isOpen = true }: { icon: React.ElementType, label: string, active?: boolean, isOpen?: boolean }) => (
-  <button className={`flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-    active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-  }`}>
+const NavItem = ({ icon: Icon, label, active = false, isOpen = true, onClick }: { icon: React.ElementType, label: string, active?: boolean, isOpen?: boolean, onClick?: () => void }) => (
+  <button 
+    onClick={onClick}
+    className={`flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+      active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+    }`}
+  >
     <Icon className="h-5 w-5 shrink-0" />
     {isOpen && <span className="ml-3 truncate">{label}</span>}
   </button>

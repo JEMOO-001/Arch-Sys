@@ -52,6 +52,7 @@ async def create_map(
 @router.get("/", response_model=List[MapResponse])
 async def list_maps(
     search: Optional[str] = None,
+    search_field: Optional[str] = "all",
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
@@ -62,14 +63,27 @@ async def list_maps(
         query = query.where(Map.status == status)
     
     if search:
-        query = query.where(
-            or_(
-                Map.unique_id.ilike(f"%{search}%"),
-                Map.layout_name.ilike(f"%{search}%"),
-                Map.project_code.ilike(f"%{search}%"),
-                Map.client_name.ilike(f"%{search}%")
+        search_term = f"%{search}%"
+        
+        if search_field == 'all':
+            query = query.where(
+                or_(
+                    Map.unique_id.ilike(search_term),
+                    Map.layout_name.ilike(search_term),
+                    Map.project_name.ilike(search_term),
+                    Map.status.ilike(search_term)
+                )
             )
-        )
+        elif search_field == 'unique_id':
+            query = query.where(Map.unique_id.ilike(search_term))
+        elif search_field == 'layout_name':
+            query = query.where(Map.layout_name.ilike(search_term))
+        elif search_field == 'project_name':
+            query = query.where(Map.project_name.ilike(search_term))
+        elif search_field == 'status':
+            query = query.where(Map.status.ilike(search_term))
+        elif search_field == 'to_whom':
+            query = query.where(Map.to_whom.ilike(search_term))
     
     result = await db.execute(query)
     return result.scalars().all()

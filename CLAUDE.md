@@ -1,35 +1,57 @@
-# Spec-Kit for Claude: Sentinel Map Archive System
+# Claude: Sentinel Map Archive Index
+# Specs: [specs/001-layout-monitoring/plan.md](specs/001-layout-monitoring/plan.md)
+       [specs/002-connect-archive-buttons/plan.md](specs/002-connect-archive-buttons/plan.md)
 
-This project is powered by **GitHub Spec-Kit**. All feature development follows a structured, spec-driven workflow.
+## Rules
+- Terse responses only.
+- Reproduce bugs before fixing.
+- Verify changes with project-specific commands.
 
-## Spec-Kit Skills (Slash Commands)
-- `/speckit-constitution`: Establish project principles and governance.
-- `/speckit-specify`: Define functional requirements and user stories in `specs/`.
-- `/speckit-plan`: Create a technical implementation plan and data models.
-- `/speckit-tasks`: Generate an actionable, ordered task list from the plan.
-- `/speckit-implement`: Execute tasks step-by-step with integrated validation.
-- `/speckit-clarify`: (Optional) Resolve underspecified requirements before planning.
-- `/speckit-analyze`: (Optional) Ensure consistency across artifacts.
-- `/speckit-checklist`: (Optional) Generate requirement-quality unit tests.
+## Symbols (Reference)
+- Backend entry: `backend/src/main.py`
+- Addin entry: `addin/src/Module1.cs`
+- Frontend entry: `frontend/src/main.tsx`
 
-## Build & Test Commands
-### ArcGIS Pro Add-in (C#)
-- **Build**: `dotnet build addin/ArcLayoutSentinel.csproj`
-- **Package**: `dotnet build addin/ArcLayoutSentinel.csproj /t:PackageAddIn`
+## Commands
+- Build: `dotnet build addin/ArcLayoutSentinel.csproj`
+- Backend: `uvicorn backend.src.main:app`
+- Test Login: `python test_login_api.py`
 
-### Backend (FastAPI)
-- **Run**: `uvicorn backend.src.main:app --reload`
-- **Verify Login**: `python test_login_api.py`
+<!-- code-review-graph MCP tools -->
+## MCP Tools: code-review-graph
 
-### Frontend (React)
-- **Dev**: `npm run dev --prefix frontend`
+**IMPORTANT: This project has a knowledge graph. ALWAYS use the
+code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
+the codebase.** The graph is faster, cheaper (fewer tokens), and gives
+you structural context (callers, dependents, test coverage) that file
+scanning cannot.
 
-## Project Constitution
-1. **Zero-SDK UI**: WPF Dialogs must not call ArcGIS Pro SDK methods on the UI thread.
-2. **Pre-Flight First**: Always verify API and UNC path connectivity before write operations.
-3. **Atomic Archival**: File system moves and Database records must succeed or fail together.
+### When to use graph tools FIRST
 
-## Current Focus
-[Implementation Plan: Layout Monitoring System](specs/001-layout-monitoring/plan.md)
-- **Status**: Ready to refactor `ConnectButton` and `LoginDialog` for stability.
-- **Workflow**: Next step is `/speckit-implement`.
+- **Exploring code**: `semantic_search_nodes` or `query_graph` instead of Grep
+- **Understanding impact**: `get_impact_radius` instead of manually tracing imports
+- **Code review**: `detect_changes` + `get_review_context` instead of reading entire files
+- **Finding relationships**: `query_graph` with callers_of/callees_of/imports_of/tests_for
+- **Architecture questions**: `get_architecture_overview` + `list_communities`
+
+Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+
+### Key Tools
+
+| Tool | Use when |
+|------|----------|
+| `detect_changes` | Reviewing code changes — gives risk-scored analysis |
+| `get_review_context` | Need source snippets for review — token-efficient |
+| `get_impact_radius` | Understanding blast radius of a change |
+| `get_affected_flows` | Finding which execution paths are impacted |
+| `query_graph` | Tracing callers, callees, imports, tests, dependencies |
+| `semantic_search_nodes` | Finding functions/classes by name or keyword |
+| `get_architecture_overview` | Understanding high-level codebase structure |
+| `refactor_tool` | Planning renames, finding dead code |
+
+### Workflow
+
+1. The graph auto-updates on file changes (via hooks).
+2. Use `detect_changes` for code review.
+3. Use `get_affected_flows` to understand impact.
+4. Use `query_graph` pattern="tests_for" to check coverage.

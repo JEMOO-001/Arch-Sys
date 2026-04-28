@@ -35,15 +35,21 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/proxy/file/${mapId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
       }
       
+      const contentType = response.headers.get('content-type') || 'application/pdf';
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      
+      // Create object URL with proper type
+      const url = window.URL.createObjectURL(blob);
       setFileUrl(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file');

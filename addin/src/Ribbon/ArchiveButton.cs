@@ -28,17 +28,9 @@ namespace ArcLayoutSentinel.Ribbon
             // Global try-catch for UX stability
             try
             {
-                System.Diagnostics.Debug.WriteLine("DEBUG: ArchiveButton.OnClick started");
+                Logger.Info("ArchiveButton.OnClick started");
 
-                // Check authentication state first
-                ConfigManager.Load();
-                if (string.IsNullOrEmpty(ConfigManager.ApiToken))
-                {
-                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                        "Not connected. Please connect first using the Connect button.",
-                        "Sentinel - Not Connected", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
+                // Removed EnsureAuthenticated() check as button is now condition-controlled in DAML.
 
                 // Check for active layout - MUST be on QueuedTask
                 var layoutInfo = await QueuedTask.Run(() =>
@@ -56,13 +48,14 @@ namespace ArcLayoutSentinel.Ribbon
 
                 if (!layoutInfo.HasActiveLayout)
                 {
+                    Logger.Warn("Archive attempt failed: No active layout view found.");
                     ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
                         "No active layout view found. Please open a layout before archiving.",
                         "Sentinel Error");
                     return;
                 }
 
-                System.Diagnostics.Debug.WriteLine("DEBUG: Creating Zero-SDK ArchiveMetadataDialog");
+                Logger.Debug("Creating Zero-SDK ArchiveMetadataDialog");
 
                 // Create and show Zero-SDK dialog on UI thread
                 _currentDialog = new ArchiveMetadataDialog(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName);
@@ -71,7 +64,7 @@ namespace ArcLayoutSentinel.Ribbon
 
                 // Show dialog MODAL on UI thread
                 bool? result = _currentDialog.ShowDialog();
-                System.Diagnostics.Debug.WriteLine($"DEBUG: Dialog returned: {result}");
+                Logger.Debug("ArchiveMetadataDialog returned: {Result}", result);
 
                 if (result != true)
                 {
@@ -82,6 +75,7 @@ namespace ArcLayoutSentinel.Ribbon
                 var preFlightResult = _currentDialog.GetPreFlightResult();
                 if (preFlightResult == null || !preFlightResult.AllPassed)
                 {
+                    Logger.Warn("Pre-flight checks did not pass. Cannot proceed with archiving.");
                     ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
                         "Pre-flight checks did not pass. Cannot proceed with archiving.\n\n" +
                         (preFlightResult?.GetSummary() ?? "No pre-flight result available."),
@@ -92,22 +86,24 @@ namespace ArcLayoutSentinel.Ribbon
                 // Capture dialog values BEFORE background execution
                 string layoutName = _currentDialog.SelectedLayout;
                 string categoryPrefix = _currentDialog.CategoryPrefix;
-                string clientName = _currentDialog.ClientName;
-                string projectCode = _currentDialog.ProjectCode;
                 string category = _currentDialog.Category;
                 string exportFormat = _currentDialog.ExportFormat;
                 string projectUri = layoutInfo.ProjectUri;
+                // Extract project name from .aprx file path
+                string projectName = string.IsNullOrEmpty(projectUri) ? "" : 
+                    System.IO.Path.GetFileNameWithoutExtension(projectUri);
 
-                System.Diagnostics.Debug.WriteLine($"DEBUG: Captured - Layout: {layoutName}, Prefix: {categoryPrefix}");
+                Logger.Info("Archiving Layout: {LayoutName}, Prefix: {Prefix}, Project: {Project}", layoutName, categoryPrefix, projectName);
 
                 // Execute archival workflow on background thread
-                await ExecuteArchiveAsync(layoutName, categoryPrefix, clientName,
-                    projectCode, category, exportFormat, projectUri);
+                await ExecuteArchiveAsync(layoutName, categoryPrefix, projectName, 
+                    category, exportFormat, projectUri);
 
-                System.Diagnostics.Debug.WriteLine("DEBUG: OnClick completed successfully");
+                Logger.Info("ArchiveButton.OnClick completed successfully");
             }
             catch (Exception ex)
             {
+                Logger.Error(ex, "ArchiveButton.OnClick FATAL ERROR");
                 ReportError("Archive Error", ex);
             }
             finally
@@ -122,9 +118,6 @@ namespace ArcLayoutSentinel.Ribbon
         /// </summary>
         private void ReportError(string title, Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"DEBUG: Exception caught: {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"DEBUG: Stack trace: {ex.StackTrace}");
-
             ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
                 $"{title}:\n{ex.Message}\n\n{ex.StackTrace}",
                 "Sentinel Error", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -139,8 +132,8 @@ namespace ArcLayoutSentinel.Ribbon
         /// Executes the archival workflow with Atomic Rollback support.
         /// Constitution: "Atomic Archival" - DB record + File move must succeed or fail together.
         /// </summary>
-        private async Task ExecuteArchiveAsync(string layoutName, string categoryPrefix, string clientName,
-            string projectCode, string category, string exportFormat, string projectUri)
+        private async Task ExecuteArchiveAsync(string layoutName, string categoryPrefix, string projectName, 
+            string category, string exportFormat, string projectUri)
         {
             string exportedFilePath = null;
             string uniqueId = null;
@@ -151,10 +144,12 @@ namespace ArcLayoutSentinel.Ribbon
                 var (generatedId, idError) = await ApiService.GetGenerateIdAsync(categoryPrefix);
                 if (string.IsNullOrEmpty(generatedId))
                 {
+                    Logger.Error("Failed to generate unique ID: {Error}", idError);
                     ShowError($"Failed to generate unique ID from the server.\n\n{idError}");
                     return;
                 }
                 uniqueId = generatedId;
+                Logger.Info("Generated Unique ID: {UniqueID}", uniqueId);
 
                 // Step 2: Build Paths
                 string archiveRoot = ConfigManager.ArchiveRoot;
@@ -162,13 +157,14 @@ namespace ArcLayoutSentinel.Ribbon
                 string ext = exportFormat.ToLowerInvariant() == "jpeg" ? "jpeg" : "pdf";
 
                 string fileName = ArchivalService.GenerateFileName(
-                    uniqueId, clientName, projectCode, ext);
+                    uniqueId, projectName, ext);
                 exportedFilePath = System.IO.Path.Combine(destinationFolder, fileName);
 
                 // Ensure directory exists
                 System.IO.Directory.CreateDirectory(destinationFolder);
 
                 // Step 3: Export File on QueuedTask (ArcGIS SDK calls)
+                Logger.Debug("Starting layout export to {FilePath}", exportedFilePath);
                 var (exported, exportError) = await QueuedTask.Run(async () =>
                 {
                     return await ExportService.ExportLayoutAsync(layoutName, exportedFilePath, exportFormat);
@@ -176,11 +172,12 @@ namespace ArcLayoutSentinel.Ribbon
 
                 if (!exported)
                 {
+                    Logger.Error("Failed to export layout: {Error}", exportError);
                     ShowError($"Failed to export layout.\n\n{exportError}");
                     return;
                 }
 
-                System.Diagnostics.Debug.WriteLine($"DEBUG: Layout exported to {exportedFilePath}");
+                Logger.Info("Layout successfully exported to {FilePath}", exportedFilePath);
 
                 // Step 4: Register Metadata in DB (Atomic: file exists, now register)
                 var mapMetadata = new
@@ -188,14 +185,14 @@ namespace ArcLayoutSentinel.Ribbon
                     unique_id = uniqueId,
                     layout_name = layoutName,
                     project_path = projectUri,
-                    project_code = projectCode,
-                    client_name = clientName,
+                    project_name = projectName,
                     category = category,
                     status = "In Progress",
                     file_path = exportedFilePath,
                     category_prefix = categoryPrefix
                 };
 
+                Logger.Debug("Registering metadata in backend for {UniqueID}", uniqueId);
                 var (success, error) = await ApiService.ArchiveMapAsync(mapMetadata);
 
                 if (!success)
@@ -206,19 +203,21 @@ namespace ArcLayoutSentinel.Ribbon
                         if (System.IO.File.Exists(exportedFilePath))
                         {
                             System.IO.File.Delete(exportedFilePath);
-                            System.Diagnostics.Debug.WriteLine($"DEBUG: Rolled back - deleted {exportedFilePath}");
+                            Logger.Warn("ATOMIC ROLLBACK: Deleted {FilePath} because API registration failed.", exportedFilePath);
                         }
                     }
                     catch (Exception rollbackEx)
                     {
-                        System.Diagnostics.Debug.WriteLine($"DEBUG: Rollback warning: {rollbackEx.Message}");
+                        Logger.Error(rollbackEx, "Rollback warning: Could not delete file during rollback");
                     }
 
+                    Logger.Error("API archive registration failed: {Error}", error);
                     ShowError($"API archive registration failed. The file was deleted to maintain system integrity.\n\nError: {error}");
                     return;
                 }
 
                 // Success!
+                Logger.Info("Archival workflow completed successfully for {UniqueID}", uniqueId);
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
@@ -234,11 +233,12 @@ namespace ArcLayoutSentinel.Ribbon
                     try
                     {
                         System.IO.File.Delete(exportedFilePath);
-                        System.Diagnostics.Debug.WriteLine($"DEBUG: Exception rollback - deleted {exportedFilePath}");
+                        Logger.Warn("Exception rollback - deleted {FilePath}", exportedFilePath);
                     }
                     catch { /* best effort */ }
                 }
 
+                Logger.Error(ex, "ExecuteArchiveAsync FATAL ERROR");
                 ShowError($"Archival failed: {ex.Message}");
             }
         }

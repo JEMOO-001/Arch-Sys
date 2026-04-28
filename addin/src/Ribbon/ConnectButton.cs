@@ -1,60 +1,43 @@
 using System;
-using System.Diagnostics;
-using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
 using ArcLayoutSentinel.Panes;
 
 namespace ArcLayoutSentinel.Ribbon
 {
+    /// <summary>
+    /// Connect Button - Toggles the Sentinel Connection DockPane.
+    /// Stability: Uses non-modal DockPane to prevent UI freezes.
+    /// </summary>
     public class ConnectButton : Button
     {
+        protected override void OnUpdate()
+        {
+            bool isLoggedIn = ArcGIS.Desktop.Framework.FrameworkApplication.State.Contains("sentinel_logged_in_state");
+
+            if (isLoggedIn)
+            {
+                this.Caption = "Connected";
+                this.Tooltip = $"Connected to Sentinel as {Services.ConfigManager.LastUsername}";
+            }
+            else
+            {
+                this.Caption = "Connect";
+                this.Tooltip = "Login to Sentinel server";
+            }
+        }
+
         protected override void OnClick()
         {
             try
             {
-                Debug.WriteLine("=== SENTINEL DEBUG ===");
-                Debug.WriteLine($"Connect button clicked at: {DateTime.Now}");
-
-                // Use the ViewModel's Show() method which handles creation + activation
+                // Force use of DockPane for stability (Zero-SDK UI pattern)
                 LoginDockPaneViewModel.Show();
-
-                Debug.WriteLine("LoginDockPaneViewModel.Show() completed successfully");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"EXCEPTION in ConnectButton: {ex}");
-
-                // If that fails, try manual creation as fallback
-                try
-                {
-                    Debug.WriteLine("Attempting fallback: manual DockPane creation");
-                    var pane = FrameworkApplication.DockPaneManager.Find("ArcLayoutSentinel_LoginDockPane");
-                    if (pane == null)
-                    {
-                        Debug.WriteLine("Pane not found, cannot force creation - check Config.daml");
-                        ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                            "Login panel not registered in Config.daml",
-                            "Sentinel Error");
-                    }
-                    else
-                    {
-                        Debug.WriteLine("Pane found, activating");
-                        pane.Activate();
-                    }
-                }
-                catch (Exception ex2)
-                {
-                    Debug.WriteLine($"Fallback also failed: {ex2}");
-                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                        $"Critical error opening login panel:\n\nPrimary error:\n{ex.Message}\n\nFallback error:\n{ex2.Message}",
-                        "Sentinel Critical Error",
-                        System.Windows.MessageBoxButton.OK,
-                        System.Windows.MessageBoxImage.Error);
-                }
-            }
-            finally
-            {
-                Debug.WriteLine("=== END DEBUG ===");
+                ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                    $"Could not open Connection pane:\n{ex.Message}",
+                    "Sentinel Error");
             }
         }
     }

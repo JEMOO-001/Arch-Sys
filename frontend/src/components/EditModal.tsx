@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from './Modal';
 import { Input } from './Input';
 import { Button } from './Button';
@@ -8,25 +8,27 @@ interface MapRecord {
   map_id: number;
   unique_id: string;
   layout_name: string;
-  project_code: string;
-  client_name: string;
+  project_path: string;
+  project_name: string;
   status: string;
   comment?: string;
   income_num?: string;
   outcome_num?: string;
+  to_whom?: string;
 }
 
 interface EditModalProps {
   isOpen: boolean;
   onClose: () => void;
   record: MapRecord | null;
-  onSave: () => void;
+  onSave: (data: MapRecord) => void;
   onRecordChange: (record: MapRecord | null) => void;
 }
 
 export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, onSave, onRecordChange }) => {
   const [formData, setFormData] = useState<Partial<MapRecord>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const pendingSaveRef = useRef(false);
 
   useEffect(() => {
     if (record) {
@@ -35,31 +37,50 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
         comment: record.comment || '',
         income_num: record.income_num || '',
         outcome_num: record.outcome_num || '',
+        to_whom: record.to_whom || '',
       });
     }
   }, [record]);
 
-const handleSubmit = async (e: React.FormEvent) => {
+  // Watch for formData changes and update parent
+  useEffect(() => {
+    if (record && formData.status && formData.status !== record.status) {
+      const updatedRecord = {
+        ...record,
+        status: formData.status,
+        comment: formData.comment || '',
+        income_num: formData.income_num || '',
+        outcome_num: formData.outcome_num || '',
+        to_whom: formData.to_whom || '',
+      };
+      onRecordChange(updatedRecord);
+    }
+  }, [formData.status, formData.to_whom]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!record) return;
     
     setIsSaving(true);
-    try {
-      // Pass only the formData values, not the original record
-      const updatedRecord = {
-        ...record,
-        status: formData.status || record.status,
-        comment: formData.comment,
-        income_num: formData.income_num,
-        outcome_num: formData.outcome_num,
-      };
-      console.log('EditModal submitting:', updatedRecord);
-      onRecordChange(updatedRecord);
-      onSave();
-      onClose();
-    } finally {
-      setIsSaving(false);
-    }
+    
+    // Build the updated record with current form data
+    const updatedRecord: MapRecord = {
+      ...record,
+      status: formData.status || record.status,
+      comment: formData.comment || '',
+      income_num: formData.income_num || '',
+      outcome_num: formData.outcome_num || '',
+      to_whom: formData.to_whom || '',
+    };
+    
+    console.log('EditModal submitting:', updatedRecord);
+    
+    // Pass data directly to onSave (not through state)
+    onSave(updatedRecord);
+    
+    // Close modal
+    onClose();
+    setIsSaving(false);
   };
 
   return (
@@ -89,6 +110,35 @@ const handleSubmit = async (e: React.FormEvent) => {
             <option value="In Progress">In Progress</option>
             <option value="Complete">Complete</option>
             <option value="On Hold">On Hold</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-gray-700">To Whom</label>
+          <select
+            className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={formData.to_whom || ''}
+            onChange={(e) => {
+              setFormData({ ...formData, to_whom: e.target.value });
+              if (record) {
+                const updatedRecord = {
+                  ...record,
+                  status: formData.status || record.status,
+                  comment: formData.comment || '',
+                  income_num: formData.income_num || '',
+                  outcome_num: formData.outcome_num || '',
+                  to_whom: e.target.value,
+                };
+                onRecordChange(updatedRecord);
+              }
+            }}
+          >
+            <option value="" hidden>-- Select --</option>
+            <option value="Gov1">Gov1</option>
+            <option value="Gov2">Gov2</option>
+            <option value="Gov3">Gov3</option>
+            <option value="Gov4">Gov4</option>
+            <option value="Gov5">Gov5</option>
           </select>
         </div>
 

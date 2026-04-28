@@ -5,8 +5,7 @@ from datetime import datetime
 class MapBase(BaseModel):
     layout_name: str
     project_path: str
-    project_code: str
-    client_name: str
+    project_name: str
     category: str
     income_num: Optional[str] = None
     outcome_num: Optional[str] = None
@@ -24,6 +23,7 @@ class MapUpdate(BaseModel):
     comment: Optional[str] = None
     income_num: Optional[str] = None
     outcome_num: Optional[str] = None
+    to_whom: Optional[str] = None
 
 class MapResponse(MapBase):
     map_id: int
