@@ -31,16 +31,24 @@ namespace ArcLayoutSentinel.Dialogs
         }
         public string CategoryPrefix { get; private set; }
         public string ExportFormat => (ExportFormatComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "PDF";
+        public string ToWhom => ToWhomComboBox.Text ?? "";
+        public string Status => StatusComboBox.Text ?? "Not Started";
+        public string Comment => CommentTextBox.Text ?? "";
+        public string IncomeNum => "";
+        public string OutcomeNum => "";
 
         private PreFlightService.PreFlightResult _lastPreFlightResult;
         private List<string> _layoutNames;
         private string _activeLayoutName;
         private List<CategoryInfo> _categories;
+        private int? _editingMapId;
+        private bool _isEditMode;
 
         public ArchiveMetadataDialog(List<string> layoutNames, string activeLayoutName)
         {
             InitializeComponent();
             ConfigManager.Load();
+            _isEditMode = false;
 
             _layoutNames = layoutNames;
             _activeLayoutName = activeLayoutName;
@@ -59,6 +67,55 @@ namespace ArcLayoutSentinel.Dialogs
             _ = RunPreFlightCheckAsync();
         }
 
+        public ArchiveMetadataDialog(List<string> layoutNames, string activeLayoutName, MapInfo existingMap)
+        {
+            InitializeComponent();
+            ConfigManager.Load();
+            _isEditMode = true;
+            _editingMapId = existingMap.MapId;
+
+            _layoutNames = layoutNames;
+            _activeLayoutName = activeLayoutName;
+            _categories = new List<CategoryInfo>();
+
+            HeaderTitle.Text = "Edit Archived Map";
+            HeaderSubtitle.Text = $"Editing: {existingMap.UniqueId}";
+            ArchiveButton.Content = "Update & Re-export";
+            UniqueIdTextBox.Text = existingMap.UniqueId;
+
+            if (layoutNames != null)
+            {
+                foreach (var name in layoutNames)
+                    if (!string.IsNullOrEmpty(name)) LayoutComboBox.Items.Add(name);
+            }
+            if (!string.IsNullOrEmpty(activeLayoutName) && !LayoutComboBox.Items.Contains(activeLayoutName))
+                LayoutComboBox.Items.Insert(0, activeLayoutName);
+
+            var existingLayout = existingMap.LayoutName;
+            for (int i = 0; i < LayoutComboBox.Items.Count; i++)
+            {
+                var item = LayoutComboBox.Items[i];
+                var itemText = item is ComboBoxItem ci ? ci.Content?.ToString() : item?.ToString();
+                if (itemText == existingLayout)
+                {
+                    LayoutComboBox.SelectedIndex = i;
+                    break;
+                }
+            }
+            if (LayoutComboBox.SelectedIndex < 0 && LayoutComboBox.Items.Count > 0)
+                LayoutComboBox.SelectedIndex = 0;
+
+            ToWhomComboBox.Text = existingMap.ToWhom ?? "";
+            StatusComboBox.Text = existingMap.Status ?? "Not Started";
+            CommentTextBox.Text = existingMap.Comment ?? "";
+
+            PreFlightIndicator.Fill = new SolidColorBrush(Colors.Green);
+            PreFlightText.Text = "Pre-flight passed - ready to update";
+            ArchiveButton.IsEnabled = true;
+
+            _ = LoadCategoriesAsync();
+        }
+
         private async System.Threading.Tasks.Task LoadCategoriesAsync()
         {
             try
@@ -68,6 +125,24 @@ namespace ArcLayoutSentinel.Dialogs
                 {
                     CategoryComboBox.Items.Add(cat.name);
                 }
+
+                if (_isEditMode && !string.IsNullOrEmpty(CategoryPrefix))
+                {
+                    for (int i = 0; i < CategoryComboBox.Items.Count; i++)
+                    {
+                        var item = CategoryComboBox.Items[i]?.ToString();
+                        if (item != null)
+                        {
+                            var cat = _categories.Find(c => c.name == item);
+                            if (cat != null && cat.prefix == CategoryPrefix)
+                            {
+                                CategoryComboBox.SelectedIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 if (CategoryPlaceholder != null)
                     CategoryPlaceholder.Visibility = Visibility.Visible;
             }
@@ -167,6 +242,8 @@ namespace ArcLayoutSentinel.Dialogs
         }
 
         public PreFlightService.PreFlightResult GetPreFlightResult() => _lastPreFlightResult;
+        public int? GetEditingMapId() => _editingMapId;
+        public bool IsEditMode() => _isEditMode;
 
         private void LayoutComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {

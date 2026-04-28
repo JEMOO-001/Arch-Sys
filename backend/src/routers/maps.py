@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from typing import List, Optional
+from datetime import datetime
 from ..database import get_db
 from ..models.maps import Map
-from ..schemas.maps import MapCreate, MapResponse, MapUpdate
+from ..schemas.maps import MapCreate, MapResponse, MapUpdate, MapEditUpdate
 from ..services.id_generator import generate_unique_id
 from ..dependencies.auth import get_current_user, TokenData
 from ..services.audit import log_multiple_changes
@@ -88,6 +89,49 @@ async def list_maps(
     result = await db.execute(query)
     return result.scalars().all()
 
+@router.get("/my", response_model=List[MapResponse])
+async def list_my_maps(
+    search: Optional[str] = None,
+    search_field: Optional[str] = "all",
+    status_filter: Optional[str] = Query(None, alias="status"),
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """List maps archived by the current user only."""
+    if current_user.user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+    
+    query = select(Map).where(Map.analyst_id == current_user.user_id)
+    
+    if status_filter:
+        query = query.where(Map.status == status_filter)
+    
+    if search:
+        search_term = f"%{search}%"
+        
+        if search_field == 'all':
+            query = query.where(
+                or_(
+                    Map.unique_id.ilike(search_term),
+                    Map.layout_name.ilike(search_term),
+                    Map.project_name.ilike(search_term),
+                    Map.status.ilike(search_term)
+                )
+            )
+        elif search_field == 'unique_id':
+            query = query.where(Map.unique_id.ilike(search_term))
+        elif search_field == 'layout_name':
+            query = query.where(Map.layout_name.ilike(search_term))
+        elif search_field == 'project_name':
+            query = query.where(Map.project_name.ilike(search_term))
+        elif search_field == 'status':
+            query = query.where(Map.status.ilike(search_term))
+        elif search_field == 'to_whom':
+            query = query.where(Map.to_whom.ilike(search_term))
+    
+    result = await db.execute(query.order_by(Map.created_at.desc()))
+    return result.scalars().all()
+
 @router.get("/{map_id}", response_model=MapResponse)
 async def get_map(
     map_id: int,
@@ -138,4 +182,42 @@ async def update_map(
         await db.refresh(db_map)
         print(f"DEBUG: Committed. New status: {db_map.status}, comment: {db_map.comment}")
         
+    return db_map
+
+@router.put("/{map_id}/reexport", response_model=MapResponse)
+async def reexport_map(
+    map_id: int,
+    map_in: MapEditUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Update map metadata and file path (for re-export/overwrite)."""
+    if current_user.user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+    
+    result = await db.execute(select(Map).where(Map.map_id == map_id))
+    db_map = result.scalar_one_or_none()
+    
+    if not db_map:
+        raise HTTPException(status_code=404, detail="Map record not found")
+    
+    if current_user.role == "analyst" and db_map.analyst_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this record")
+    
+    update_data = map_in.model_dump(exclude_unset=True)
+    
+    for field, new_val in update_data.items():
+        if new_val is not None:
+            if field == "category_prefix":
+                continue
+            old_val = getattr(db_map, field)
+            setattr(db_map, field, new_val)
+            print(f"DEBUG: {field} updated from '{old_val}' to '{new_val}'")
+    
+    db_map.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(db_map)
+    print(f"DEBUG: Re-export committed. map_id={map_id}, status={db_map.status}")
+    
     return db_map

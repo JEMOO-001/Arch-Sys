@@ -14,25 +14,16 @@ using System.Windows;
 
 namespace ArcLayoutSentinel.Ribbon
 {
-    /// <summary>
-    /// Archive Button - Triggers map archival with Pre-Flight checks.
-    /// Constitution: "Pre-Flight First" - Always verify API and UNC connectivity before writes.
-    /// Constitution: "Zero-SDK UI" - Dialog data collected on UI thread, SDK calls on QueuedTask.
-    /// </summary>
     public class ArchiveButton : Button
     {
         private ArchiveMetadataDialog _currentDialog = null;
 
         protected override async void OnClick()
         {
-            // Global try-catch for UX stability
             try
             {
                 Logger.Info("ArchiveButton.OnClick started");
 
-                // Removed EnsureAuthenticated() check as button is now condition-controlled in DAML.
-
-                // Check for active layout - MUST be on QueuedTask
                 var layoutInfo = await QueuedTask.Run(() =>
                 {
                     var project = Project.Current;
@@ -55,51 +46,20 @@ namespace ArcLayoutSentinel.Ribbon
                     return;
                 }
 
-                Logger.Debug("Creating Zero-SDK ArchiveMetadataDialog");
+                var selectionDialog = new ArchiveSelectionDialog();
+                try { selectionDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+                selectionDialog.ShowDialog();
 
-                // Create and show Zero-SDK dialog on UI thread
-                _currentDialog = new ArchiveMetadataDialog(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName);
-                try { _currentDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { /* fallback */ }
-                _currentDialog.Closed += Dialog_Closed;
-
-                // Show dialog MODAL on UI thread
-                bool? result = _currentDialog.ShowDialog();
-                Logger.Debug("ArchiveMetadataDialog returned: {Result}", result);
-
-                if (result != true)
+                if (selectionDialog.Result == ArchiveSelectionDialog.SelectionResult.CreateNew)
                 {
-                    return; // User cancelled
+                    await HandleCreateNewAsync(layoutInfo);
+                }
+                else if (selectionDialog.Result == ArchiveSelectionDialog.SelectionResult.EditExisting)
+                {
+                    await HandleEditExistingAsync(layoutInfo);
                 }
 
-                // Get Pre-Flight result from dialog
-                var preFlightResult = _currentDialog.GetPreFlightResult();
-                if (preFlightResult == null || !preFlightResult.AllPassed)
-                {
-                    Logger.Warn("Pre-flight checks did not pass. Cannot proceed with archiving.");
-                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                        "Pre-flight checks did not pass. Cannot proceed with archiving.\n\n" +
-                        (preFlightResult?.GetSummary() ?? "No pre-flight result available."),
-                        "Pre-Flight Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                // Capture dialog values BEFORE background execution
-                string layoutName = _currentDialog.SelectedLayout;
-                string categoryPrefix = _currentDialog.CategoryPrefix;
-                string category = _currentDialog.Category;
-                string exportFormat = _currentDialog.ExportFormat;
-                string projectUri = layoutInfo.ProjectUri;
-                // Extract project name from .aprx file path
-                string projectName = string.IsNullOrEmpty(projectUri) ? "" : 
-                    System.IO.Path.GetFileNameWithoutExtension(projectUri);
-
-                Logger.Info("Archiving Layout: {LayoutName}, Prefix: {Prefix}, Project: {Project}", layoutName, categoryPrefix, projectName);
-
-                // Execute archival workflow on background thread
-                await ExecuteArchiveAsync(layoutName, categoryPrefix, projectName, 
-                    category, exportFormat, projectUri);
-
-                Logger.Info("ArchiveButton.OnClick completed successfully");
+                Logger.Info("ArchiveButton.OnClick completed");
             }
             catch (Exception ex)
             {
@@ -112,27 +72,73 @@ namespace ArcLayoutSentinel.Ribbon
             }
         }
 
-        /// <summary>
-        /// Reports errors with full details for debugging.
-        /// Constitution: Robust error reporting prevents silent failures.
-        /// </summary>
-        private void ReportError(string title, Exception ex)
+        private async Task HandleCreateNewAsync(dynamic layoutInfo)
         {
-            ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                $"{title}:\n{ex.Message}\n\n{ex.StackTrace}",
-                "Sentinel Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            _currentDialog = new ArchiveMetadataDialog(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName);
+            try { _currentDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+            _currentDialog.Closed += Dialog_Closed;
+
+            bool? result = _currentDialog.ShowDialog();
+            if (result != true) return;
+
+            var preFlightResult = _currentDialog.GetPreFlightResult();
+            if (preFlightResult == null || !preFlightResult.AllPassed)
+            {
+                ShowPreFlightError(preFlightResult);
+                return;
+            }
+
+            string layoutName = _currentDialog.SelectedLayout;
+            string categoryPrefix = _currentDialog.CategoryPrefix;
+            string category = _currentDialog.Category;
+            string exportFormat = _currentDialog.ExportFormat;
+            string projectUri = layoutInfo.ProjectUri;
+            string projectName = string.IsNullOrEmpty(projectUri) ? "" : System.IO.Path.GetFileNameWithoutExtension(projectUri);
+
+            await ExecuteCreateNewAsync(layoutName, categoryPrefix, projectName, category, exportFormat, projectUri);
         }
 
-        private void Dialog_Closed(object sender, EventArgs e)
+        private async Task HandleEditExistingAsync(dynamic layoutInfo)
         {
-            _currentDialog = null;
+            var mapSelectionDialog = new MapSelectionDialog();
+            try { mapSelectionDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+            mapSelectionDialog.ShowDialog();
+
+            if (mapSelectionDialog.SelectedMap == null) return;
+
+            var existingMap = mapSelectionDialog.SelectedMap;
+            Logger.Info("Selected map for edit: {UniqueID}", existingMap.UniqueId);
+
+            _currentDialog = new ArchiveMetadataDialog(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName, existingMap);
+            try { _currentDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+            _currentDialog.Closed += Dialog_Closed;
+
+            bool? result = _currentDialog.ShowDialog();
+            if (result != true) return;
+
+            var preFlightResult = _currentDialog.GetPreFlightResult();
+            if (preFlightResult == null || !preFlightResult.AllPassed)
+            {
+                ShowPreFlightError(preFlightResult);
+                return;
+            }
+
+            int mapId = existingMap.MapId;
+            string layoutName = _currentDialog.SelectedLayout;
+            string categoryPrefix = _currentDialog.CategoryPrefix;
+            string category = _currentDialog.Category;
+            string exportFormat = _currentDialog.ExportFormat;
+            string projectUri = layoutInfo.ProjectUri;
+            string projectName = string.IsNullOrEmpty(projectUri) ? "" : System.IO.Path.GetFileNameWithoutExtension(projectUri);
+            string toWhom = _currentDialog.ToWhom;
+            string status = _currentDialog.Status;
+            string comment = _currentDialog.Comment;
+
+            await ExecuteEditExistingAsync(mapId, layoutName, categoryPrefix, projectName, category, 
+                exportFormat, projectUri, toWhom, status, comment, existingMap.FilePath, existingMap.UniqueId);
         }
 
-        /// <summary>
-        /// Executes the archival workflow with Atomic Rollback support.
-        /// Constitution: "Atomic Archival" - DB record + File move must succeed or fail together.
-        /// </summary>
-        private async Task ExecuteArchiveAsync(string layoutName, string categoryPrefix, string projectName, 
+        private async Task ExecuteCreateNewAsync(string layoutName, string categoryPrefix, string projectName,
             string category, string exportFormat, string projectUri)
         {
             string exportedFilePath = null;
@@ -140,31 +146,22 @@ namespace ArcLayoutSentinel.Ribbon
 
             try
             {
-                // Step 1: Generate Unique ID from API
                 var (generatedId, idError) = await ApiService.GetGenerateIdAsync(categoryPrefix);
                 if (string.IsNullOrEmpty(generatedId))
                 {
-                    Logger.Error("Failed to generate unique ID: {Error}", idError);
                     ShowError($"Failed to generate unique ID from the server.\n\n{idError}");
                     return;
                 }
                 uniqueId = generatedId;
-                Logger.Info("Generated Unique ID: {UniqueID}", uniqueId);
 
-                // Step 2: Build Paths
                 string archiveRoot = ConfigManager.ArchiveRoot;
                 string destinationFolder = ArchivalService.GenerateDestinationFolder(archiveRoot, category);
                 string ext = exportFormat.ToLowerInvariant() == "jpeg" ? "jpeg" : "pdf";
 
-                string fileName = ArchivalService.GenerateFileName(
-                    uniqueId, projectName, ext);
+                string fileName = ArchivalService.GenerateFileName(uniqueId, projectName, ext);
                 exportedFilePath = System.IO.Path.Combine(destinationFolder, fileName);
-
-                // Ensure directory exists
                 System.IO.Directory.CreateDirectory(destinationFolder);
 
-                // Step 3: Export File on QueuedTask (ArcGIS SDK calls)
-                Logger.Debug("Starting layout export to {FilePath}", exportedFilePath);
                 var (exported, exportError) = await QueuedTask.Run(async () =>
                 {
                     return await ExportService.ExportLayoutAsync(layoutName, exportedFilePath, exportFormat);
@@ -172,14 +169,10 @@ namespace ArcLayoutSentinel.Ribbon
 
                 if (!exported)
                 {
-                    Logger.Error("Failed to export layout: {Error}", exportError);
                     ShowError($"Failed to export layout.\n\n{exportError}");
                     return;
                 }
 
-                Logger.Info("Layout successfully exported to {FilePath}", exportedFilePath);
-
-                // Step 4: Register Metadata in DB (Atomic: file exists, now register)
                 var mapMetadata = new
                 {
                     unique_id = uniqueId,
@@ -192,64 +185,126 @@ namespace ArcLayoutSentinel.Ribbon
                     category_prefix = categoryPrefix
                 };
 
-                Logger.Debug("Registering metadata in backend for {UniqueID}", uniqueId);
                 var (success, error) = await ApiService.ArchiveMapAsync(mapMetadata);
-
                 if (!success)
                 {
-                    // ATOMIC ROLLBACK: Delete exported file if registration failed
-                    try
-                    {
-                        if (System.IO.File.Exists(exportedFilePath))
-                        {
-                            System.IO.File.Delete(exportedFilePath);
-                            Logger.Warn("ATOMIC ROLLBACK: Deleted {FilePath} because API registration failed.", exportedFilePath);
-                        }
-                    }
-                    catch (Exception rollbackEx)
-                    {
-                        Logger.Error(rollbackEx, "Rollback warning: Could not delete file during rollback");
-                    }
-
-                    Logger.Error("API archive registration failed: {Error}", error);
-                    ShowError($"API archive registration failed. The file was deleted to maintain system integrity.\n\nError: {error}");
+                    TryDeleteFile(exportedFilePath);
+                    ShowError($"API archive registration failed.\n\nError: {error}");
                     return;
                 }
 
-                // Success!
-                Logger.Info("Archival workflow completed successfully for {UniqueID}", uniqueId);
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                        $"Archive completed successfully!\n\nID: {uniqueId}\nFile: {exportedFilePath}",
-                        "Sentinel Success", MessageBoxButton.OK, MessageBoxImage.Information);
-                });
+                ShowSuccess($"Archive completed successfully!\n\nID: {uniqueId}\nFile: {exportedFilePath}");
             }
             catch (Exception ex)
             {
-                // ATOMIC ROLLBACK on any exception
-                if (!string.IsNullOrEmpty(exportedFilePath) && System.IO.File.Exists(exportedFilePath))
-                {
-                    try
-                    {
-                        System.IO.File.Delete(exportedFilePath);
-                        Logger.Warn("Exception rollback - deleted {FilePath}", exportedFilePath);
-                    }
-                    catch { /* best effort */ }
-                }
-
-                Logger.Error(ex, "ExecuteArchiveAsync FATAL ERROR");
+                TryDeleteFile(exportedFilePath);
+                Logger.Error(ex, "ExecuteCreateNewAsync FATAL ERROR");
                 ShowError($"Archival failed: {ex.Message}");
             }
+        }
+
+        private async Task ExecuteEditExistingAsync(int mapId, string layoutName, string categoryPrefix, string projectName,
+            string category, string exportFormat, string projectUri, string toWhom, string status, string comment,
+            string existingFilePath, string uniqueId)
+        {
+            string newExportedFilePath = null;
+
+            try
+            {
+                string archiveRoot = ConfigManager.ArchiveRoot;
+                string destinationFolder = ArchivalService.GenerateDestinationFolder(archiveRoot, category);
+                string ext = exportFormat.ToLowerInvariant() == "jpeg" ? "jpeg" : "pdf";
+
+                string fileName = ArchivalService.GenerateFileName(uniqueId, projectName, ext);
+                newExportedFilePath = System.IO.Path.Combine(destinationFolder, fileName);
+                System.IO.Directory.CreateDirectory(destinationFolder);
+
+                var (exported, exportError) = await QueuedTask.Run(async () =>
+                {
+                    return await ExportService.ExportLayoutAsync(layoutName, newExportedFilePath, exportFormat);
+                });
+
+                if (!exported)
+                {
+                    ShowError($"Failed to re-export layout.\n\n{exportError}");
+                    return;
+                }
+
+                var mapMetadata = new
+                {
+                    layout_name = layoutName,
+                    project_path = projectUri,
+                    project_name = projectName,
+                    category = category,
+                    file_path = newExportedFilePath,
+                    category_prefix = categoryPrefix,
+                    to_whom = toWhom,
+                    status = status,
+                    comment = comment
+                };
+
+                var (success, error) = await ApiService.UpdateMapAsync(mapId, mapMetadata);
+                if (!success)
+                {
+                    TryDeleteFile(newExportedFilePath);
+                    ShowError($"Failed to update map record.\n\nError: {error}");
+                    return;
+                }
+
+                if (System.IO.File.Exists(existingFilePath) && existingFilePath != newExportedFilePath)
+                {
+                    try { System.IO.File.Delete(existingFilePath); } catch { }
+                }
+
+                ShowSuccess($"Map updated successfully!\n\nID: {uniqueId}\nFile: {newExportedFilePath}");
+            }
+            catch (Exception ex)
+            {
+                TryDeleteFile(newExportedFilePath);
+                Logger.Error(ex, "ExecuteEditExistingAsync FATAL ERROR");
+                ShowError($"Update failed: {ex.Message}");
+            }
+        }
+
+        private void ReportError(string title, Exception ex)
+        {
+            ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show($"{title}:\n{ex.Message}", "Sentinel Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+
+        private void ShowPreFlightError(PreFlightService.PreFlightResult result)
+        {
+            ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                "Pre-flight checks did not pass.\n\n" + (result?.GetSummary() ?? "No pre-flight result available."),
+                "Pre-Flight Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         private void ShowError(string message)
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(message, "Sentinel Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(message, "Sentinel Error", MessageBoxButton.OK, MessageBoxImage.Error);
             });
+        }
+
+        private void ShowSuccess(string message)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(message, "Sentinel Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            });
+        }
+
+        private void TryDeleteFile(string filePath)
+        {
+            if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
+            {
+                try { System.IO.File.Delete(filePath); } catch { }
+            }
+        }
+
+        private void Dialog_Closed(object sender, EventArgs e)
+        {
+            _currentDialog = null;
         }
     }
 }

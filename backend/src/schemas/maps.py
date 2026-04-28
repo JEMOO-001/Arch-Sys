@@ -25,6 +25,15 @@ class MapUpdate(BaseModel):
     outcome_num: Optional[str] = None
     to_whom: Optional[str] = None
 
+class MapEditUpdate(BaseModel):
+    status: Optional[str] = None
+    comment: Optional[str] = None
+    income_num: Optional[str] = None
+    outcome_num: Optional[str] = None
+    to_whom: Optional[str] = None
+    category: Optional[str] = None
+    category_prefix: Optional[str] = None
+
 class MapResponse(MapBase):
     map_id: int
     unique_id: str
