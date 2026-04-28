@@ -12,10 +12,12 @@ obj/
 
 # Agent and CLI Specific folders (all AI agent folders)
 .adal/
+.agents/
 .augment/
 .bob/
 .claude/
 .codebuddy/
+.code-review-graph/
 .commandcode/
 .continue/
 .cortex/
@@ -32,13 +34,13 @@ obj/
 .mcpjam/
 .mux/
 .neovate/
-.opencode/
 .opencode.json
 .openhands/
 .pi/
 .pochi/
 .qoder/
 .qwen/
+.remember/
 .roo/
 .specify/
 .trae/
@@ -55,25 +57,24 @@ AA_extracted.txt
 architecture-diagram.html
 *PRD.md
 *.sln.dot
-Debug Result.txt
 DIAGNOSTIC_INSTRUCTIONS.md
 skills-lock.json
 AGENTS.md
+CLAUDE.md
+GEMINI.md
 
 # Mockups and test HTML files
 frontend/public/m*.html
 frontend/public/mockups/
-FrontEnd/public/m*.html
 
 # Test and temp folders
 addin_test/
-"New folder/"
 IMG/
 gis-archiving/
 skills/
-
-# Code review graph
-.code-review-graph/
+specs/
+docs/
+"New folder/"
 
 # Node / Frontend
 node_modules/
@@ -88,6 +89,7 @@ __pycache__/
 *.pyo
 *.pyd
 .venv/
+.venv_local/
 venv/
 .env
 
