@@ -10,13 +10,70 @@ obj/
 *.user
 *.suo
 
-# Agent and CLI Specific folders
-.agents/
+# Agent and CLI Specific folders (all AI agent folders)
+.adal/
+.augment/
+.bob/
 .claude/
+.codebuddy/
+.commandcode/
+.continue/
+.cortex/
+.crush/
+.factory/
 .gemini/
+.goose/
+.iflow/
+.junie/
+.kilocode/
+.kiro/
+.kode/
+.mcp.json
+.mcpjam/
+.mux/
+.neovate/
+.opencode/
+.opencode.json
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
 .specify/
-.remember/
-.git-history/
+.trae/
+.vibe/
+.windsurf/
+.windsurfrules
+.zencoder/
+
+# Project specific non-code files
+VSBuild Result.txt
+Debug Result.txt
+AA_answers.md
+AA_extracted.txt
+architecture-diagram.html
+*PRD.md
+*.sln.dot
+Debug Result.txt
+DIAGNOSTIC_INSTRUCTIONS.md
+skills-lock.json
+AGENTS.md
+
+# Mockups and test HTML files
+frontend/public/m*.html
+frontend/public/mockups/
+FrontEnd/public/m*.html
+
+# Test and temp folders
+addin_test/
+"New folder/"
+IMG/
+gis-archiving/
+skills/
+
+# Code review graph
+.code-review-graph/
 
 # Node / Frontend
 node_modules/
@@ -34,13 +91,6 @@ __pycache__/
 venv/
 .env
 
-# Project specific non-code files
-VSBuild Result.txt
-Debug Result.txt
-AA_answers.md
-AA_extracted.txt
-architecture-diagram.html
-*PRD.md
-*.sln.dot
-# Added by code-review-graph
-.code-review-graph/
+# Build outputs
+addin/bin/Release/*.esriAddInX
+*.zip
