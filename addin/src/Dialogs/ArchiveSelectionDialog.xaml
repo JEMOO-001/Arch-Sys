@@ -3,15 +3,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Archive Map"
         Height="280"
-        Width="400"
+        Width="420"
         WindowStartupLocation="CenterOwner"
-        Background="#F3F3F3"
         WindowStyle="SingleBorderWindow"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        Background="#252525">
     <Window.Resources>
         <Style TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="Foreground" Value="#323232"/>
+            <Setter Property="Foreground" Value="{Binding TextPrimaryBrush, RelativeSource={RelativeSource AncestorType=Window}}"/>
         </Style>
         <Style x:Key="ActionButton" TargetType="Button">
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -22,7 +22,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" 
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="4"
@@ -43,44 +43,70 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="MainGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Border Grid.Row="0" Background="#ECECEC" Padding="20,16" BorderBrush="#D9D9D9" BorderThickness="0,0,0,1">
+        <Border Grid.Row="0" x:Name="HeaderBorder" Padding="20,16" BorderThickness="0,0,0,1" Background="#333333" BorderBrush="#3a3a3a">
             <StackPanel>
-                <TextBlock Text="Archive Map" FontSize="16" FontWeight="SemiBold"/>
-                <TextBlock Text="Choose an action to continue" FontSize="12" Foreground="#5E5E5E" Margin="0,4,0,0"/>
+                <TextBlock Text="Archive Map" FontSize="15" FontWeight="Medium" Foreground="#e6e6e6"/>
+                <TextBlock Text="Choose an action to continue" FontSize="12" Foreground="#999999" Margin="0,3,0,0"/>
             </StackPanel>
         </Border>
 
         <!-- Action Cards -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
-            
+
             <!-- Create New Card -->
-            <Button x:Name="CreateNewButton" Style="{StaticResource ActionButton}" 
+            <Button x:Name="CreateNewButton" 
                     Background="#0078D4" Foreground="White" Margin="8,0"
+                    Padding="16,18" Cursor="Hand" BorderThickness="0"
                     Click="CreateNewButton_Click">
-                <StackPanel Width="130">
-                    <TextBlock Text="+" FontSize="32" FontWeight="Light" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                    <TextBlock Text="Create New" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                    <TextBlock Text="Archive a new map layout" FontSize="10" Foreground="#CCCCCC" 
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="#0078D4" CornerRadius="6" Padding="16,18">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.88"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <StackPanel Width="140">
+                    <TextBlock Text="＋" FontSize="24" Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock Text="Create new" FontSize="13" FontWeight="Medium" Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Archive a fresh map layout" FontSize="11" Foreground="#cccccc"
                                HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,0"/>
                 </StackPanel>
             </Button>
 
             <!-- Edit Existing Card -->
-            <Button x:Name="EditExistingButton" Style="{StaticResource ActionButton}" 
+            <Button x:Name="EditExistingButton" 
                     Background="#D87E17" Foreground="White" Margin="8,0"
+                    Padding="16,18" Cursor="Hand" BorderThickness="0"
                     Click="EditExistingButton_Click">
-                <StackPanel Width="130">
-                    <TextBlock Text="&#x270E;" FontSize="28" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                    <TextBlock Text="Edit Existing" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                    <TextBlock Text="Update an existing archived map" FontSize="10" Foreground="#E8D4B8" 
-                               HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,0"/>
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="#D87E17" CornerRadius="6" Padding="16,18">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.88"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <StackPanel Width="140">
+                    <TextBlock Text="✏" FontSize="24" Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock Text="Edit existing" FontSize="13" FontWeight="Medium" Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Update an archived map" FontSize="11"
+                               Foreground="#cccccc" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,0"/>
                 </StackPanel>
             </Button>
         </StackPanel>

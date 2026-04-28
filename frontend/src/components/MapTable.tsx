@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Eye, Download, Pen, History } from 'lucide-react';
 
 interface MapRecord {
   map_id: number;
@@ -17,6 +18,8 @@ interface MapTableProps {
   onViewNewTab: (record: MapRecord) => void;
   onEdit: (record: MapRecord) => void;
   onDownload: (record: MapRecord) => void;
+  onAuditLog?: (record: MapRecord) => void;
+  hasAuditLog?: (mapId: number) => boolean;
   currentUserId: number;
   userRole: string;
 }
@@ -26,6 +29,8 @@ export const MapTable: React.FC<MapTableProps> = ({
   onViewNewTab, 
   onEdit, 
   onDownload, 
+  onAuditLog,
+  hasAuditLog,
   currentUserId, 
   userRole 
 }) => {
@@ -112,33 +117,44 @@ export const MapTable: React.FC<MapTableProps> = ({
                 {new Date(row.created_at).toLocaleDateString()}
               </td>
               <td className="px-4 py-3 md:px-6 md:py-4 text-right">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-1">
                   {/* View - Opens in new tab */}
                   <button
                     onClick={() => onViewNewTab(row)}
-                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
                     title="Open in New Tab"
                   >
-                    View
+                    <Eye className="h-4 w-4" />
                   </button>
                   
                   {/* Download */}
                   <button
                     onClick={() => onDownload(row)}
-                    className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-full transition-colors"
                     title="Download PDF"
                   >
-                    Download
+                    <Download className="h-4 w-4" />
                   </button>
                   
                   {/* Edit - Only if has permission */}
                   {canEdit(row.analyst_id) && (
                     <button
                       onClick={() => onEdit(row)}
-                      className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-full transition-colors"
                       title="Edit Record"
                     >
-                      Edit
+                      <Pen className="h-4 w-4" />
+                    </button>
+                  )}
+                  
+                  {/* Audit Log - Only if has audit log */}
+                  {hasAuditLog && hasAuditLog(row.map_id) && (
+                    <button
+                      onClick={() => onAuditLog?.(row)}
+                      className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-full transition-colors"
+                      title="View Audit Log"
+                    >
+                      <History className="h-4 w-4" />
                     </button>
                   )}
                 </div>

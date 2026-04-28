@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -10,7 +9,7 @@ namespace ArcLayoutSentinel.Dialogs
 {
     public partial class ArchiveMetadataDialog : Window
     {
-        public string SelectedLayout 
+        public string SelectedLayout
         {
             get
             {
@@ -19,7 +18,7 @@ namespace ArcLayoutSentinel.Dialogs
                 return LayoutComboBox.SelectedItem?.ToString() ?? "";
             }
         }
-        public string Category 
+        public string Category
         {
             get
             {
@@ -63,6 +62,8 @@ namespace ArcLayoutSentinel.Dialogs
                 LayoutComboBox.Items.Insert(0, activeLayoutName);
             if (LayoutComboBox.Items.Count > 0) LayoutComboBox.SelectedIndex = 0;
 
+            PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#888888"));
+
             _ = LoadCategoriesAsync();
             _ = RunPreFlightCheckAsync();
         }
@@ -78,9 +79,9 @@ namespace ArcLayoutSentinel.Dialogs
             _activeLayoutName = activeLayoutName;
             _categories = new List<CategoryInfo>();
 
-            HeaderTitle.Text = "Edit Archived Map";
+            HeaderTitle.Text = "Edit archived map";
             HeaderSubtitle.Text = $"Editing: {existingMap.UniqueId}";
-            ArchiveButton.Content = "Update & Re-export";
+            ArchiveButton.Content = "Update & re-export";
             UniqueIdTextBox.Text = existingMap.UniqueId;
 
             if (layoutNames != null)
@@ -109,8 +110,8 @@ namespace ArcLayoutSentinel.Dialogs
             StatusComboBox.Text = existingMap.Status ?? "Not Started";
             CommentTextBox.Text = existingMap.Comment ?? "";
 
-            PreFlightIndicator.Fill = new SolidColorBrush(Colors.Green);
-            PreFlightText.Text = "Pre-flight passed - ready to update";
+            PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3B6D11"));
+            PreFlightText.Text = "Pre-flight passed — ready to update";
             ArchiveButton.IsEnabled = true;
 
             _ = LoadCategoriesAsync();
@@ -124,23 +125,6 @@ namespace ArcLayoutSentinel.Dialogs
                 foreach (var cat in _categories)
                 {
                     CategoryComboBox.Items.Add(cat.name);
-                }
-
-                if (_isEditMode && !string.IsNullOrEmpty(CategoryPrefix))
-                {
-                    for (int i = 0; i < CategoryComboBox.Items.Count; i++)
-                    {
-                        var item = CategoryComboBox.Items[i]?.ToString();
-                        if (item != null)
-                        {
-                            var cat = _categories.Find(c => c.name == item);
-                            if (cat != null && cat.prefix == CategoryPrefix)
-                            {
-                                CategoryComboBox.SelectedIndex = i;
-                                break;
-                            }
-                        }
-                    }
                 }
 
                 if (CategoryPlaceholder != null)
@@ -158,7 +142,7 @@ namespace ArcLayoutSentinel.Dialogs
             {
                 CategoryPlaceholder.Visibility = CategoryComboBox.SelectedItem != null ? Visibility.Collapsed : Visibility.Visible;
             }
-            
+
             var selectedItem = CategoryComboBox.SelectedItem;
             if (selectedItem is string selectedName)
             {
@@ -174,32 +158,29 @@ namespace ArcLayoutSentinel.Dialogs
         {
             PreFlightButton.IsEnabled = false;
             ArchiveButton.IsEnabled = false;
-            PreFlightText.Text = "Running pre-flight checks...";
-            PreFlightIndicator.Fill = new SolidColorBrush(Colors.Orange);
+            PreFlightText.Text = "Running checks…";
+            PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D87E17"));
 
             try
             {
                 _lastPreFlightResult = await PreFlightService.RunPreFlightCheckAsync();
-                
-                System.Diagnostics.Debug.WriteLine($"PreFlight Result: AllPassed={_lastPreFlightResult?.AllPassed}");
-                
+
                 if (_lastPreFlightResult != null && _lastPreFlightResult.AllPassed)
                 {
-                    PreFlightIndicator.Fill = new SolidColorBrush(Colors.Green);
-                    PreFlightText.Text = "Pre-flight passed - ready to archive";
+                    PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3B6D11"));
+                    PreFlightText.Text = "Pre-flight passed — ready to archive";
                     ArchiveButton.IsEnabled = true;
                 }
                 else
                 {
-                    PreFlightIndicator.Fill = new SolidColorBrush(Colors.Red);
-                    PreFlightText.Text = "Pre-flight failed - see details";
+                    PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#cc0000"));
+                    PreFlightText.Text = "Pre-flight failed — see details";
                 }
             }
             catch (Exception ex)
             {
-                PreFlightIndicator.Fill = new SolidColorBrush(Colors.Red);
+                PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#cc0000"));
                 PreFlightText.Text = $"Error: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine($"PreFlight Error: {ex}");
             }
             finally
             {
@@ -216,8 +197,6 @@ namespace ArcLayoutSentinel.Dialogs
 
         private void ArchiveButton_Click(object sender, RoutedEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ArchiveButton_Click triggered");
-            
             if (_lastPreFlightResult == null || !_lastPreFlightResult.AllPassed)
             {
                 MessageBox.Show("Pre-flight checks must pass before archiving.", "Pre-Flight Required", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -236,7 +215,6 @@ namespace ArcLayoutSentinel.Dialogs
 
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("CancelButton_Click triggered");
             DialogResult = false;
             Close();
         }
@@ -244,9 +222,5 @@ namespace ArcLayoutSentinel.Dialogs
         public PreFlightService.PreFlightResult GetPreFlightResult() => _lastPreFlightResult;
         public int? GetEditingMapId() => _editingMapId;
         public bool IsEditMode() => _isEditMode;
-
-        private void LayoutComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-        }
     }
 }

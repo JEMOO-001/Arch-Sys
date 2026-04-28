@@ -7,6 +7,7 @@ import { AnalystStats } from '../components/AnalystStats';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { EditModal } from '../components/EditModal';
+import { AuditLogModal } from '../components/AuditLogModal';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 
@@ -61,6 +62,9 @@ export const Dashboard: React.FC = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<MapRecord | null>(null);
   const [editRecordForModal, setEditRecordForModal] = useState<MapRecord | null>(null);
+  const [auditMapIds, setAuditMapIds] = useState<Set<number>>(new Set());
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditRecord, setAuditRecord] = useState<MapRecord | null>(null);
 
   const token = localStorage.getItem('token');
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
@@ -78,6 +82,17 @@ export const Dashboard: React.FC = () => {
         setStats(statsRes.data);
         setMaps(mapsRes.data);
         
+        const mapIds = mapsRes.data.map((m: MapRecord) => m.map_id);
+        if (mapIds.length > 0) {
+          try {
+            const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers });
+            const auditIds = new Set<number>((auditBatchRes.data.maps_with_audit || []).map((id: number) => id));
+            setAuditMapIds(auditIds);
+          } catch (err) {
+            console.error('Failed to fetch audit status:', err);
+          }
+        }
+        
         if (isAdmin) {
           const analystsRes = await axios.get(`${API_URL}/stats/analysts`, { headers });
           setAnalysts(analystsRes.data);
@@ -90,6 +105,21 @@ export const Dashboard: React.FC = () => {
     };
     fetchData();
   }, [token, isAdmin]);
+  
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      const headers = { Authorization: `Bearer ${token}` };
+      axios.get(`${API_URL}/maps/`, { headers })
+        .then(res => {
+          if (res.data && Array.isArray(res.data)) {
+            setMaps(res.data);
+          }
+        })
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [token]);
 
 const handleSearch = async () => {
     try {
@@ -150,7 +180,12 @@ const handleSearch = async () => {
     setEditRecordForModal(record);
     setEditOpen(true);
   };
-
+  
+  const handleViewAuditLog = (record: MapRecord) => {
+    setAuditRecord(record);
+    setAuditOpen(true);
+  };
+  
   const handleRecordChange = (updated: MapRecord | null) => {
     console.log('Record changed:', updated);
     setEditRecordForModal(updated);
@@ -306,6 +341,8 @@ const handleSearch = async () => {
                   onViewNewTab={handleViewNewTab}
                   onEdit={handleEdit}
                   onDownload={handleDownload}
+                  onAuditLog={handleViewAuditLog}
+                  hasAuditLog={(mapId) => auditMapIds.has(mapId)}
                 />
               </div>
             ) : (
@@ -330,6 +367,14 @@ const handleSearch = async () => {
         onSave={handleSaveEdit}
         onRecordChange={handleRecordChange}
       />
+      
+      {auditRecord && (
+        <AuditLogModal 
+          isOpen={auditOpen} 
+          onClose={() => setAuditOpen(false)} 
+          record={auditRecord}
+        />
+      )}
     </div>
   );
 };

@@ -36,10 +36,13 @@ async def stream_file(
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
     
+    if not db_map.file_path:
+        raise HTTPException(status_code=404, detail="No file attached to this map record")
+    
     file_path = Path(db_map.file_path)
     
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Physical file not found")
+        raise HTTPException(status_code=404, detail=f"File not found at path: {db_map.file_path}")
     
     media_type = "application/pdf"
     is_image = file_path.suffix.lower() in [".jpeg", ".jpg", ".png"]

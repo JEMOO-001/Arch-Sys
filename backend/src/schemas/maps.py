@@ -33,6 +33,7 @@ class MapEditUpdate(BaseModel):
     to_whom: Optional[str] = None
     category: Optional[str] = None
     category_prefix: Optional[str] = None
+    file_path: Optional[str] = None
 
 class MapResponse(MapBase):
     map_id: int

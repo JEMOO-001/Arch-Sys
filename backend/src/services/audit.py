@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timedelta
 from ..models.maps import AuditLog
 
 async def log_change(
@@ -17,10 +18,10 @@ async def log_change(
         changed_by=user_id,
         field_name=field_name,
         old_value=str(old_value) if old_value is not None else None,
-        new_value=str(new_value) if new_value is not None else None
+        new_value=str(new_value) if new_value is not None else None,
+        changed_at=datetime.utcnow() + timedelta(hours=3)
     )
     db.add(audit_entry)
-    # We don't commit here; we assume the caller will commit as part of the transaction
     return audit_entry
 
 async def log_multiple_changes(
@@ -31,7 +32,7 @@ async def log_multiple_changes(
 ):
     """
     Convenience method to log multiple changes at once.
+    Logs ALL changes, even if same value (to track user actions).
     """
     for field, (old_val, new_val) in changes.items():
-        if old_val != new_val:
-            await log_change(db, map_id, user_id, field, old_val, new_val)
+        await log_change(db, map_id, user_id, field, old_val, new_val)

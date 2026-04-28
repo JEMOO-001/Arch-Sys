@@ -1,133 +1,93 @@
 <Window x:Class="ArcLayoutSentinel.Dialogs.ArchiveMetadataDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Archive Map" 
-        Height="520" 
-        Width="400"
+        Title="Archive Map"
+        Height="480"
+        Width="420"
         WindowStartupLocation="CenterOwner"
-        Background="#F3F3F3"
-        WindowStyle="SingleBorderWindow">
+        WindowStyle="SingleBorderWindow"
+        ResizeMode="NoResize"
+        Background="#252525">
     <Window.Resources>
         <Style TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="#323232"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#e6e6e6"/>
         </Style>
-        
-        <Style TargetType="ComboBox">
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Padding" Value="6,4"/>
-        </Style>
-
         <Style TargetType="TextBox">
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Padding" Value="6,4"/>
-        </Style>
-        
-        <Style x:Key="PrimaryBtn" TargetType="Button">
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Padding" Value="12,6"/>
-            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="8,6"/>
         </Style>
     </Window.Resources>
 
-    <Grid Background="#F3F3F3">
+    <Grid x:Name="MainGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        
+
         <!-- Header -->
-        <Border Grid.Row="0" Background="#ECECEC" Padding="15,12" BorderBrush="#D9D9D9" BorderThickness="0,0,0,1">
+        <Border Grid.Row="0" x:Name="HeaderBorder" Padding="20,16" BorderThickness="0,0,0,1" Background="#333333" BorderBrush="#3a3a3a">
             <StackPanel>
-                <TextBlock x:Name="HeaderTitle" Text="Archive Map" FontSize="14" FontWeight="SemiBold"/>
-                <TextBlock x:Name="HeaderSubtitle" Text="Select layout and category to archive" FontSize="11" Foreground="#5E5E5E" Margin="0,2,0,0"/>
+                <TextBlock x:Name="HeaderTitle" Text="Archive map — create new" FontSize="15" FontWeight="Medium" Foreground="#e6e6e6"/>
+                <TextBlock x:Name="HeaderSubtitle" Text="Select layout and category to archive" FontSize="12" Foreground="#999999" Margin="0,3,0,0"/>
             </StackPanel>
         </Border>
-        
+
         <!-- Content -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="15,14">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="#252525">
+            <StackPanel Margin="20,16">
                 <!-- Pre-flight -->
-                <Border Background="White" BorderBrush="#C8C8C8" BorderThickness="1" Padding="10" Margin="0,0,0,14">
+                <Border x:Name="PreFlightBorder" Background="#2a2a2a" BorderBrush="#3a3a3a" BorderThickness="0.5" CornerRadius="6" Padding="12,10" Margin="0,0,0,16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        
-                        <Ellipse x:Name="PreFlightIndicator" Width="8" Height="8" Margin="0,0,8,0" Fill="#6B6B6B"/>
-                        <TextBlock x:Name="PreFlightText" Grid.Column="1" Text="Ready to check" FontSize="11" Foreground="#5E5E5E" VerticalAlignment="Center"/>
-                        <Button x:Name="PreFlightButton" Grid.Column="2" Content="Run Check" Padding="8,4" 
-                                Background="#4D4D4D" Foreground="White" BorderThickness="0"
+                        <Ellipse x:Name="PreFlightIndicator" Width="10" Height="10" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="PreFlightText" Grid.Column="1" Text="Ready to run pre-flight check" FontSize="12" Foreground="#999999" VerticalAlignment="Center"/>
+                        <Button x:Name="PreFlightButton" Grid.Column="2" Content="Run check" Padding="6,5" Background="#333333" Foreground="#cccccc" BorderBrush="#444444" Cursor="Hand"
                                 Click="PreFlightButton_Click"/>
                     </Grid>
                 </Border>
 
                 <!-- Unique ID (Edit Mode Only) -->
-                <StackPanel x:Name="UniqueIdPanel" Margin="0,0,0,10" Visibility="Collapsed">
-                    <TextBlock Text="Unique ID:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <TextBox x:Name="UniqueIdTextBox" IsReadOnly="True" Background="#E8E8E8" BorderBrush="#C8C8C8"/>
+                <StackPanel x:Name="UniqueIdPanel" Margin="0,0,0,14" Visibility="Collapsed">
+                    <TextBlock Text="Unique ID" FontSize="12" FontWeight="Medium" Foreground="#999999" Margin="0,0,0,5"/>
+                    <TextBox x:Name="UniqueIdTextBox" IsReadOnly="True" Background="#2a2a2a" Foreground="#999999" BorderBrush="#3a3a3a"/>
                 </StackPanel>
-                
+
                 <!-- Layout -->
-                <StackPanel Margin="0,0,0,10">
-                    <TextBlock Text="Select Layout:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="LayoutComboBox" BorderBrush="#C8C8C8">
-                        <ComboBox.ItemContainerStyle>
-                            <Style TargetType="ComboBoxItem">
-                                <Setter Property="Foreground" Value="Black"/>
-                            </Style>
-                        </ComboBox.ItemContainerStyle>
-                    </ComboBox>
+                <StackPanel Margin="0,0,0,14">
+                    <TextBlock Text="Select layout" FontSize="12" FontWeight="Medium" Foreground="#999999" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="LayoutComboBox" Background="#2a2a2a" Foreground="#e6e6e6" BorderBrush="#3a3a3a"/>
                 </StackPanel>
-                
+
                 <!-- Category -->
-                <StackPanel Margin="0,0,0,10">
-                    <TextBlock Text="Category:" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <StackPanel Margin="0,0,0,14">
+                    <TextBlock Text="Category" FontSize="12" FontWeight="Medium" Foreground="#999999" Margin="0,0,0,5"/>
                     <Grid>
-                        <ComboBox x:Name="CategoryComboBox" BorderBrush="#C8C8C8" SelectionChanged="CategoryComboBox_SelectionChanged"
-                                 Background="White" Foreground="Black">
-                            <ComboBox.ItemContainerStyle>
-                                <Style TargetType="ComboBoxItem">
-                                    <Setter Property="Foreground" Value="Black"/>
-                                </Style>
-                            </ComboBox.ItemContainerStyle>
-                        </ComboBox>
-                        <TextBlock x:Name="CategoryPlaceholder" Text="Select a category" Margin="8,0,0,0" 
-                                   Foreground="#999999" IsHitTestVisible="False" VerticalAlignment="Center"
-                                   Visibility="Visible"/>
+                        <ComboBox x:Name="CategoryComboBox" Background="#2a2a2a" Foreground="#e6e6e6" BorderBrush="#3a3a3a" SelectionChanged="CategoryComboBox_SelectionChanged"/>
+                        <TextBlock x:Name="CategoryPlaceholder" Text="— select a category —" Margin="10,0,0,0" Foreground="#666666" IsHitTestVisible="False" VerticalAlignment="Center" Visibility="Visible"/>
                     </Grid>
                 </StackPanel>
-                
+
                 <!-- Export Format -->
-                <StackPanel Margin="0,0,0,10">
-                    <TextBlock Text="Export Format:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="ExportFormatComboBox" BorderBrush="#C8C8C8" SelectedIndex="0">
-                        <ComboBox.ItemContainerStyle>
-                            <Style TargetType="ComboBoxItem">
-                                <Setter Property="Foreground" Value="Black"/>
-                            </Style>
-                        </ComboBox.ItemContainerStyle>
+                <StackPanel Margin="0,0,0,14">
+                    <TextBlock Text="Export format" FontSize="12" FontWeight="Medium" Foreground="#999999" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="ExportFormatComboBox" SelectedIndex="0" Background="#2a2a2a" Foreground="#e6e6e6" BorderBrush="#3a3a3a">
                         <ComboBoxItem Content="PDF"/>
                         <ComboBoxItem Content="JPEG"/>
                     </ComboBox>
                 </StackPanel>
 
                 <!-- To Whom (Edit Mode Only) -->
-                <StackPanel x:Name="ToWhomPanel" Margin="0,0,0,10" Visibility="Collapsed">
-                    <TextBlock Text="To Whom:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="ToWhomComboBox" BorderBrush="#C8C8C8" IsEditable="True">
-                        <ComboBox.ItemContainerStyle>
-                            <Style TargetType="ComboBoxItem">
-                                <Setter Property="Foreground" Value="Black"/>
-                            </Style>
-                        </ComboBox.ItemContainerStyle>
+                <StackPanel x:Name="ToWhomPanel" Margin="0,0,0,14" Visibility="Collapsed">
+                    <TextBlock Text="To whom" FontSize="12" FontWeight="Medium" Foreground="#999999" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="ToWhomComboBox" Background="#2a2a2a" Foreground="#e6e6e6" BorderBrush="#3a3a3a" IsEditable="True">
                         <ComboBoxItem Content=""/>
                         <ComboBoxItem Content="Gov1"/>
                         <ComboBoxItem Content="Gov2"/>
@@ -138,14 +98,9 @@
                 </StackPanel>
 
                 <!-- Status (Edit Mode Only) -->
-                <StackPanel x:Name="StatusPanel" Margin="0,0,0,10" Visibility="Collapsed">
-                    <TextBlock Text="Status:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="StatusComboBox" BorderBrush="#C8C8C8">
-                        <ComboBox.ItemContainerStyle>
-                            <Style TargetType="ComboBoxItem">
-                                <Setter Property="Foreground" Value="Black"/>
-                            </Style>
-                        </ComboBox.ItemContainerStyle>
+                <StackPanel x:Name="StatusPanel" Margin="0,0,0,14" Visibility="Collapsed">
+                    <TextBlock Text="Status" FontSize="12" FontWeight="Medium" Foreground="#999999" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="StatusComboBox" Background="#2a2a2a" Foreground="#e6e6e6" BorderBrush="#3a3a3a">
                         <ComboBoxItem Content="Not Started"/>
                         <ComboBoxItem Content="In Progress"/>
                         <ComboBoxItem Content="Completed"/>
@@ -154,28 +109,26 @@
                 </StackPanel>
 
                 <!-- Comment (Edit Mode Only) -->
-                <StackPanel x:Name="CommentPanel" Margin="0,0,0,10" Visibility="Collapsed">
-                    <TextBlock Text="Comment:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <TextBox x:Name="CommentTextBox" BorderBrush="#C8C8C8" AcceptsReturn="True" TextWrapping="Wrap"
-                             Height="60" VerticalScrollBarVisibility="Auto"/>
+                <StackPanel x:Name="CommentPanel" Margin="0,0,0,14" Visibility="Collapsed">
+                    <TextBlock Text="Comment" FontSize="12" FontWeight="Medium" Foreground="#999999" Margin="0,0,0,5"/>
+                    <TextBox x:Name="CommentTextBox" Background="#2a2a2a" Foreground="#e6e6e6" BorderBrush="#3a3a3a" AcceptsReturn="True" TextWrapping="Wrap" Height="60" VerticalScrollBarVisibility="Auto"/>
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
-        
+
         <!-- Footer -->
-        <Border Grid.Row="2" Background="#ECECEC" Padding="15,10" BorderBrush="#D9D9D9" BorderThickness="0,1,0,0">
+        <Border Grid.Row="2" x:Name="FooterBorder" Padding="20,12" BorderThickness="0,1,0,0" Background="#333333" BorderBrush="#3a3a3a">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                
-                <Button Grid.Column="1" Content="Cancel" Margin="0,0,8,0" 
-                        Background="#5E5E5E" Foreground="White" BorderThickness="0" Padding="12,6"
+                <Button Grid.Column="1" x:Name="CancelBtn" Content="← Back" Margin="0,0,8,0"
+                        Padding="8,7" BorderThickness="0" Background="#444444" Foreground="#cccccc" Cursor="Hand"
                         Click="CancelButton_Click"/>
-                <Button Grid.Column="2" x:Name="ArchiveButton" Content="Archive Map" 
-                        Background="#0078D4" Foreground="White" BorderThickness="0" Padding="12,6"
+                <Button Grid.Column="2" x:Name="ArchiveButton" Content="Archive map"
+                        Background="#0078D4" Foreground="White" BorderThickness="0" Padding="18,7" Cursor="Hand"
                         Click="ArchiveButton_Click"/>
             </Grid>
         </Border>

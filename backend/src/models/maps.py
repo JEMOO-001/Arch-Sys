@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timedelta
 from .base import Base
 
 class Map(Base):
@@ -19,8 +19,8 @@ class Map(Base):
     comment = Column(Text)
     file_path = Column(Text, nullable=False)
     analyst_id = Column(Integer, ForeignKey("Users.user_id"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
 
     # Relationships
     analyst = relationship("User", back_populates="maps")
@@ -34,4 +34,4 @@ class AuditLog(Base):
     old_value = Column(Text)
     new_value = Column(Text)
     changed_by = Column(Integer, ForeignKey("Users.user_id"), nullable=False)
-    changed_at = Column(DateTime, default=datetime.utcnow)
+    changed_at = Column(DateTime)
