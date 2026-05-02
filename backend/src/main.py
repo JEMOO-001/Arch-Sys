@@ -2,6 +2,8 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
 from .routers import users, maps, proxy, stats, auth, categories
 from .core.config import settings
 
@@ -12,10 +14,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Rate Limiter
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="Sentinel API", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(429, _rate_limit_exceeded_handler)
 
 # 1. CORS Configuration
-# Use specific origins from environment variable
 origins = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",")]
 app.add_middleware(
     CORSMiddleware,
@@ -41,15 +47,17 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
     return response
 
-# 4. Router Registration
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(maps.router)
-app.include_router(proxy.router)
-app.include_router(stats.router)
-app.include_router(categories.router)
+# 4. Router Registration with API versioning
+API_PREFIX = "/api/v1"
+app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(users.router, prefix=API_PREFIX)
+app.include_router(maps.router, prefix=API_PREFIX)
+app.include_router(proxy.router, prefix=API_PREFIX)
+app.include_router(stats.router, prefix=API_PREFIX)
+app.include_router(categories.router, prefix=API_PREFIX)
 
 @app.get("/health")
 async def health_check():

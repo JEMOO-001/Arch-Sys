@@ -19,6 +19,7 @@ class Map(Base):
     comment = Column(Text)
     file_path = Column(Text, nullable=False)
     analyst_id = Column(Integer, ForeignKey("Users.user_id"), nullable=False, index=True)
+    tenant_id = Column(Integer, nullable=False, index=True, default=1)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 
@@ -35,3 +36,4 @@ class AuditLog(Base):
     new_value = Column(Text)
     changed_by = Column(Integer, ForeignKey("Users.user_id"), nullable=False)
     changed_at = Column(DateTime)
+    tenant_id = Column(Integer, nullable=False, index=True, default=1)

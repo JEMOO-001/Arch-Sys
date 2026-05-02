@@ -7,11 +7,14 @@ from pathlib import Path
 from html import escape
 from ..database import get_db
 from ..models.maps import Map
-from ..dependencies.auth import get_current_user, TokenData, verify_token
-from ..core.config import settings
-from ..routers.maps import check_map_authorization
+from ..dependencies.auth import verify_token
 
 router = APIRouter(prefix="/proxy", tags=["Proxy"])
+
+# Local copy to avoid circular import
+def _check_map_auth(current_user, db_map):
+    if current_user.role == "analyst" and db_map.analyst_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this record")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 @router.get("/file/{map_id}")
@@ -38,7 +41,7 @@ async def stream_file(
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
     
-    check_map_authorization(current_user, db_map)
+    _check_map_auth(current_user, db_map)
     
     if not db_map.file_path:
         raise HTTPException(status_code=404, detail="No file attached to this map record")
@@ -110,7 +113,7 @@ async def raw_file(
     if not db_map:
         raise HTTPException(status_code=404, detail="Map not found")
     
-    check_map_authorization(current_user, db_map)
+    _check_map_auth(current_user, db_map)
     
     file_path = Path(db_map.file_path)
     

@@ -8,3 +8,7 @@ pyodbc
 python-multipart
 aioodbc
 slowapi
+pytest
+pytest-asyncio
+httpx
+aiosqlite
