@@ -3,7 +3,7 @@ import { Clock, X } from 'lucide-react';
 import { Modal } from './Modal';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface MapRecord {
   map_id: number;

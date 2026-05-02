@@ -2,16 +2,13 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import declarative_base
 from .core.config import settings
 
-# For SQL Server with async, we use aioodbc or similar
-# The connection string needs to be adjusted for async if using SQLAlchemy async
-# DATABASE_URL=mssql+pyodbc://jimmy:x001@172.20.70.75/GIS_Archiving?driver=ODBC+Driver+17+for+SQL+Server
-# For async, we often need a different driver or a wrapper.
-# Since we are using standard pyodbc in the .env, I will wrap it for async or use synchronous for now if needed.
-# However, to be modern, let's assume we use the async pattern.
-
 engine = create_async_engine(
     settings.DATABASE_URL.replace("pyodbc", "aioodbc"),
-    echo=True,
+    echo=False,
+    pool_size=20,
+    max_overflow=10,
+    pool_pre_ping=True,
+    pool_recycle=3600,
 )
 
 AsyncSessionLocal = async_sessionmaker(

@@ -4,10 +4,12 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pathlib import Path
+from html import escape
 from ..database import get_db
 from ..models.maps import Map
 from ..dependencies.auth import get_current_user, TokenData, verify_token
 from ..core.config import settings
+from ..routers.maps import check_map_authorization
 
 router = APIRouter(prefix="/proxy", tags=["Proxy"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
@@ -36,13 +38,15 @@ async def stream_file(
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
     
+    check_map_authorization(current_user, db_map)
+    
     if not db_map.file_path:
         raise HTTPException(status_code=404, detail="No file attached to this map record")
     
     file_path = Path(db_map.file_path)
     
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found at path: {db_map.file_path}")
+        raise HTTPException(status_code=404, detail="File not found")
     
     media_type = "application/pdf"
     is_image = file_path.suffix.lower() in [".jpeg", ".jpg", ".png"]
@@ -65,11 +69,12 @@ async def stream_file(
         return FileResponse(path=file_path, media_type=media_type)
     
     # PDFs: embed in HTML with iframe
+    safe_token = escape(token or '')
     html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <title>{file_path.name}</title>
+        <title>{escape(file_path.name)}</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             html, body {{ height: 100%; overflow: hidden; }}
@@ -77,7 +82,7 @@ async def stream_file(
         </style>
     </head>
     <body>
-        <iframe src="/proxy/raw/{map_id}?token={token or ''}"></iframe>
+        <iframe src="/proxy/raw/{map_id}?token={safe_token}"></iframe>
     </body>
     </html>
     """
@@ -104,6 +109,8 @@ async def raw_file(
     
     if not db_map:
         raise HTTPException(status_code=404, detail="Map not found")
+    
+    check_map_authorization(current_user, db_map)
     
     file_path = Path(db_map.file_path)
     

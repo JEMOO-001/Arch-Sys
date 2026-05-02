@@ -3,9 +3,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from typing import List, Optional
+import logging
 from datetime import datetime, timedelta
 
 from ..database import get_db
+
+logger = logging.getLogger(__name__)
 from ..models.maps import Map, AuditLog
 from ..schemas.maps import MapCreate, MapResponse, MapUpdate, MapEditUpdate
 from ..services.id_generator import generate_unique_id
@@ -13,6 +16,12 @@ from ..dependencies.auth import get_current_user, TokenData
 from ..services.audit import log_change, log_multiple_changes
 
 router = APIRouter(prefix="/maps", tags=["Maps"])
+
+
+def check_map_authorization(current_user: TokenData, db_map: Map):
+    """Check if user is authorized to access this map record."""
+    if current_user.role == "analyst" and db_map.analyst_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this record")
 
 @router.get("/next-id")
 async def get_next_id(
@@ -58,6 +67,8 @@ async def list_maps(
     search: Optional[str] = None,
     search_field: Optional[str] = "all",
     status: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
@@ -89,6 +100,7 @@ async def list_maps(
         elif search_field == 'to_whom':
             query = query.where(Map.to_whom.ilike(search_term))
     
+    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 
@@ -97,6 +109,8 @@ async def list_my_maps(
     search: Optional[str] = None,
     search_field: Optional[str] = "all",
     status_filter: Optional[str] = Query(None, alias="status"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
@@ -132,7 +146,8 @@ async def list_my_maps(
         elif search_field == 'to_whom':
             query = query.where(Map.to_whom.ilike(search_term))
     
-    result = await db.execute(query.order_by(Map.created_at.desc()))
+    query = query.order_by(Map.created_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(query)
     return result.scalars().all()
 
 @router.get("/{map_id}", response_model=MapResponse)
@@ -146,6 +161,8 @@ async def get_map(
     
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
+    
+    check_map_authorization(current_user, db_map)
         
     return db_map
 
@@ -169,8 +186,8 @@ async def update_map(
         raise HTTPException(status_code=403, detail="Not authorized to edit this record")
     
     update_data = map_in.model_dump()  # Include all fields, even None
-    print(f"DEBUG: update_data = {update_data}")
-    print(f"DEBUG: map_in fields = {map_in}")
+    logger.debug(f"update_data = {update_data}")
+    logger.debug(f"map_in fields = {map_in}")
     
     # Collect changes for audit log - log ALL provided fields (even if same)
     changes = {}
@@ -181,7 +198,7 @@ async def update_map(
             # Always log if explicitly provided (even if same value)
             changes[field] = (str(old_val) if old_val else "", str(new_val) if new_val else "")
             setattr(db_map, field, new_val)
-            print(f"DEBUG: {field} set from '{old_val}' to '{new_val}'")
+            logger.debug(f"{field} set from '{old_val}' to '{new_val}'")
     
     # Log changes as SINGLE batch entry (only actual changes, newlines)
     if changes and current_user.user_id:
@@ -193,7 +210,7 @@ async def update_map(
     # Always commit if we have fields to update (regardless of audit log)
     await db.commit()
     await db.refresh(db_map)
-    print(f"DEBUG: Committed. New status: {db_map.status}, comment: {db_map.comment}")
+    logger.info(f"Map {map_id} updated. New status: {db_map.status}")
         
     return db_map
 
@@ -230,7 +247,7 @@ async def reexport_map(
             if str(old_val) != str(new_val):
                 changes[field] = (str(old_val) if old_val else "", str(new_val) if new_val else "")
             setattr(db_map, field, new_val)
-            print(f"DEBUG: {field} updated from '{old_val}' to '{new_val}'")
+            logger.debug(f"{field} updated from '{old_val}' to '{new_val}'")
     
     # Log changes as SINGLE batch entry (only actual changes, newlines)
     if changes and current_user.user_id:
@@ -243,7 +260,7 @@ async def reexport_map(
     
     await db.commit()
     await db.refresh(db_map)
-    print(f"DEBUG: Re-export committed. map_id={map_id}, status={db_map.status}")
+    logger.info(f"Map {map_id} re-exported. status={db_map.status}")
     
     return db_map
 
@@ -299,6 +316,13 @@ async def get_audit_log(
     """Get audit log entries for a map."""
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+    
+    # Check authorization - verify map exists and user has access
+    map_result = await db.execute(select(Map).where(Map.map_id == map_id))
+    db_map = map_result.scalar_one_or_none()
+    if not db_map:
+        raise HTTPException(status_code=404, detail="Map record not found")
+    check_map_authorization(current_user, db_map)
     
     result = await db.execute(
         select(AuditLog).where(AuditLog.map_id == map_id).order_by(AuditLog.changed_at.desc())
