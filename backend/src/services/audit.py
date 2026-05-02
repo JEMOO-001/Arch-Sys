@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from ..models.maps import AuditLog
 
 async def log_change(
@@ -19,7 +19,7 @@ async def log_change(
         field_name=field_name,
         old_value=str(old_value) if old_value is not None else None,
         new_value=str(new_value) if new_value is not None else None,
-        changed_at=datetime.utcnow() + timedelta(hours=3)
+        changed_at=datetime.now(timezone.utc) + timedelta(hours=3)
     )
     db.add(audit_entry)
     return audit_entry

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from typing import List, Optional
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from ..database import get_db
 
@@ -49,11 +49,13 @@ async def create_map(
         unique_id = await generate_unique_id(db, map_in.category_prefix)
     
     # 2. Create Map record
+    tenant_id = 1  # TODO: Extract from request.state.tenant_id when multi-tenant is enabled
     db_map = Map(
         **map_in.model_dump(exclude={"category_prefix", "unique_id"}),
         unique_id=unique_id,
         analyst_id=current_user.user_id,
-        created_at=datetime.utcnow() + timedelta(hours=3)
+        tenant_id=tenant_id,
+        created_at=datetime.now(timezone.utc) + timedelta(hours=3)
     )
     
     db.add(db_map)
@@ -72,7 +74,8 @@ async def list_maps(
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
-    query = select(Map)
+    tenant_id = 1  # TODO: Extract from request.state.tenant_id when multi-tenant is enabled
+    query = select(Map).where(Map.tenant_id == tenant_id)
     
     if status:
         query = query.where(Map.status == status)
@@ -118,7 +121,8 @@ async def list_my_maps(
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
     
-    query = select(Map).where(Map.analyst_id == current_user.user_id)
+    tenant_id = 1
+    query = select(Map).where(Map.analyst_id == current_user.user_id, Map.tenant_id == tenant_id)
     
     if status_filter:
         query = query.where(Map.status == status_filter)
@@ -256,7 +260,7 @@ async def reexport_map(
             combined = "\n".join(changes_list)
             await log_change(db, map_id, current_user.user_id, "batch", combined, "")
     
-    db_map.updated_at = datetime.utcnow() + timedelta(hours=3)
+    db_map.updated_at = datetime.now(timezone.utc) + timedelta(hours=3)
     
     await db.commit()
     await db.refresh(db_map)
