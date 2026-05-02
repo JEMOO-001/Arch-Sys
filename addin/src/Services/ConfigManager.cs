@@ -7,7 +7,7 @@ namespace ArcLayoutSentinel.Services
 {
     public static class ConfigManager
     {
-        public static string BaseUrl { get; set; } = "http://localhost:8000";
+        public static string BaseUrl { get; set; } = "http://localhost:8000/api/v1";
         public static string ArchiveRoot { get; set; } = @"\\172.20.0.125\e\LTest";
         public static string ApiToken { get; set; } = "";
         public static string LastUsername { get; set; } = "";

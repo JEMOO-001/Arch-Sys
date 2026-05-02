@@ -36,9 +36,9 @@ namespace ArcLayoutSentinel.Services
             try
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                var response = await client.GetAsync($"{ConfigManager.BaseUrl}/health");
-                result.ApiReachable = response.IsSuccessStatusCode;
-                if (!result.ApiReachable) result.ApiError = $"HTTP {(int)response.StatusCode}";
+var response = await client.GetAsync("http://localhost:8000/health");
+                    result.ApiReachable = response.IsSuccessStatusCode;
+                    if (!result.ApiReachable) result.ApiError = $"HTTP {(int)response.StatusCode}";
             }
             catch (Exception ex) { result.ApiReachable = false; result.ApiError = $"{ex.GetType().Name}: {ex.Message}"; }
 
@@ -73,7 +73,7 @@ namespace ArcLayoutSentinel.Services
             try
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                var response = await client.GetAsync($"{ConfigManager.BaseUrl}/health");
+                var response = await client.GetAsync("http://localhost:8000/health");
                 return (response.IsSuccessStatusCode, null);
             }
             catch (Exception ex) { return (false, ex.Message); }

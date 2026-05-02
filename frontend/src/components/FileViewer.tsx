@@ -10,7 +10,7 @@ interface FileViewerProps {
   uniqueId: string | null;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
 
 export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, uniqueId }) => {
   const [loading, setLoading] = useState(false);

@@ -10,7 +10,7 @@ namespace ArcLayoutSentinel.Services
 {
     public class ExportService
     {
-        public static async Task<(bool success, string error)> ExportLayoutAsync(string layoutName, string outputPath, string format)
+        public static async Task<(bool success, string error)> ExportLayoutAsync(string layoutName, string outputPath, string format, int dpi = 300)
         {
             return await QueuedTask.Run(() =>
             {
@@ -23,13 +23,13 @@ namespace ArcLayoutSentinel.Services
 
                     if (format.Equals("PDF", StringComparison.OrdinalIgnoreCase))
                     {
-                        PDFFormat pdf = new PDFFormat { OutputFileName = outputPath, Resolution = 300, DoCompressVectorGraphics = true, DoEmbedFonts = true };
+                        PDFFormat pdf = new PDFFormat { OutputFileName = outputPath, Resolution = dpi, DoCompressVectorGraphics = true, DoEmbedFonts = true };
                         layout.Export(pdf);
                         return (File.Exists(outputPath), !File.Exists(outputPath) ? "Export completed but file not created." : null);
                     }
                     else
                     {
-                        JPEGFormat jpeg = new JPEGFormat { OutputFileName = outputPath, Resolution = 300, HasWorldFile = false };
+                        JPEGFormat jpeg = new JPEGFormat { OutputFileName = outputPath, Resolution = dpi, HasWorldFile = false };
                         layout.Export(jpeg);
                         return (File.Exists(outputPath), !File.Exists(outputPath) ? "Export completed but file not created." : null);
                     }

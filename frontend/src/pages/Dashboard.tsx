@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Database, LogOut, LayoutGrid, BarChart3 } from 'lucide-react';
+import { Database, LogOut, LayoutGrid, BarChart3, Clock } from 'lucide-react';
 import { MapTable } from '../components/MapTable';
 import { SummaryCards } from '../components/SummaryCards';
 import { AnalystStats } from '../components/AnalystStats';
@@ -8,10 +8,11 @@ import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { EditModal } from '../components/EditModal';
 import { AuditLogModal } from '../components/AuditLogModal';
+import { MapDetailModal } from '../components/MapDetailModal';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
 
 interface Stats {
   total: number;
@@ -35,6 +36,7 @@ interface MapRecord {
   layout_name: string;
   project_path: string;
   project_name: string;
+  category?: string;
   status: string;
   created_at: string;
   analyst_id: number;
@@ -47,6 +49,7 @@ interface MapRecord {
 
 export const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
+  const [currentTime, setCurrentTime] = useState(new Date());
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentView, setCurrentView] = useState<'monitor' | 'summary'>('monitor');
   const [stats, setStats] = useState<Stats>({ total: 0, notStarted: 0, inProgress: 0, complete: 0, onHold: 0 });
@@ -65,9 +68,16 @@ export const Dashboard: React.FC = () => {
   const [auditMapIds, setAuditMapIds] = useState<Set<number>>(new Set());
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditRecord, setAuditRecord] = useState<MapRecord | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<MapRecord | null>(null);
 
   const token = localStorage.getItem('token');
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -114,6 +124,15 @@ export const Dashboard: React.FC = () => {
         .then(res => {
           if (res.data && Array.isArray(res.data)) {
             setMaps(res.data);
+            const mapIds = res.data.map((m: MapRecord) => m.map_id);
+            if (mapIds.length > 0) {
+              axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers })
+                .then(auditRes => {
+                  const auditIds = new Set<number>((auditRes.data.maps_with_audit || []).map((id: number) => id));
+                  setAuditMapIds(auditIds);
+                })
+                .catch(() => {});
+            }
           }
         })
         .catch(() => {});
@@ -146,9 +165,7 @@ const handleSearch = async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/proxy/file/${record.map_id}?mode=attachment`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       if (!response.ok) {
@@ -171,7 +188,7 @@ const handleSearch = async () => {
       setTimeout(() => window.URL.revokeObjectURL(url), 500);
     } catch (err) {
       console.error('Download failed:', err);
-      alert('Download failed. Please try View → Open in New Tab instead.');
+      alert('Download failed. Please try Preview instead.');
     }
   };
 
@@ -186,46 +203,48 @@ const handleSearch = async () => {
     setAuditOpen(true);
   };
   
+  const handleDetail = (record: MapRecord) => {
+    setDetailRecord(record);
+    setDetailOpen(true);
+  };
+  
   const handleRecordChange = (updated: MapRecord | null) => {
     console.log('Record changed:', updated);
     setEditRecordForModal(updated);
   };
 
-  const handleSaveEdit = async () => {
-    if (!editRecordForModal) return;
+  const handleSaveEdit = async (updatedRecord?: MapRecord) => {
+    const record = updatedRecord || editRecordForModal;
+    if (!record) return;
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      console.log('Saving edit for map_id:', editRecordForModal.map_id);
-      console.log('Sending:', {
-        status: editRecordForModal.status,
-        comment: editRecordForModal.comment,
-        income_num: editRecordForModal.income_num,
-        outcome_num: editRecordForModal.outcome_num,
-        to_whom: editRecordForModal.to_whom,
-      });
       
-      const res = await axios.patch(`${API_URL}/maps/${editRecordForModal.map_id}`, {
-        status: editRecordForModal.status,
-        comment: editRecordForModal.comment,
-        income_num: editRecordForModal.income_num,
-        outcome_num: editRecordForModal.outcome_num,
-        to_whom: editRecordForModal.to_whom,
+      const res = await axios.patch(`${API_URL}/maps/${record.map_id}`, {
+        status: record.status,
+        comment: record.comment,
+        income_num: record.income_num,
+        outcome_num: record.outcome_num,
+        to_whom: record.to_whom,
       }, { headers });
       
-      console.log('API Response:', res.data);
       setEditOpen(false);
       
-      // Force refresh all data
       setSearch('');
       const mapsRes = await axios.get(`${API_URL}/maps/`, { headers });
-      console.log('Fetched maps after save:', mapsRes.data);
       setMaps(mapsRes.data);
       
-      // Also refresh stats
       const statsRes = await axios.get(`${API_URL}/stats/summary`, { headers });
       setStats(statsRes.data);
+
+      const mapIds = mapsRes.data.map((m: MapRecord) => m.map_id);
+      if (mapIds.length > 0) {
+        try {
+          const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers });
+          const auditIds = new Set<number>((auditBatchRes.data.maps_with_audit || []).map((id: number) => id));
+          setAuditMapIds(auditIds);
+        } catch { }
+      }
     } catch (err: any) {
-      console.error('Save failed:', err?.response?.data || err.message);
       alert('Save failed: ' + (err?.response?.data?.detail || err.message));
     }
   };
@@ -285,7 +304,7 @@ const handleSearch = async () => {
       </motion.aside>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-[1920px] px-2 md:px-4">
           {/* Header */}
           <div className="mb-6 md:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -294,9 +313,17 @@ const handleSearch = async () => {
               </h1>
               <p className="mt-1 text-gray-500 text-sm md:text-base">Welcome back, {user?.username}</p>
             </div>
-            <Button onClick={() => setIsSidebarOpen(!isSidebarOpen)} variant="secondary" className="md:hidden">
-              Menu
-            </Button>
+            <div className="flex items-center gap-4">
+              <div className="hidden md:flex items-center gap-2 text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
+                <Clock className="h-4 w-4" />
+                <span className="text-sm font-medium font-mono">
+                  {currentTime.toLocaleTimeString()}
+                </span>
+              </div>
+              <Button onClick={() => setIsSidebarOpen(!isSidebarOpen)} variant="secondary" className="md:hidden">
+                Menu
+              </Button>
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -318,9 +345,11 @@ const handleSearch = async () => {
                         <option value="all" hidden>All Fields</option>
                         <option value="unique_id">ID</option>
                         <option value="layout_name">Layout</option>
-                        <option value="project_name">Project</option>
-                        <option value="status">Status</option>
-                        <option value="to_whom">To Whom</option>
+                        <option value="income_num">رقم الوارد</option>
+                        <option value="outcome_num">رقم الصادر</option>
+                        <option value="to_whom">جهه الولاية</option>
+                        <option value="status">حالة الدراسة</option>
+                        <option value="comment">ملاحظات</option>
                       </select>
                       <Input 
                         placeholder="Search..." 
@@ -341,6 +370,7 @@ const handleSearch = async () => {
                   onViewNewTab={handleViewNewTab}
                   onEdit={handleEdit}
                   onDownload={handleDownload}
+                  onDetail={handleDetail}
                   onAuditLog={handleViewAuditLog}
                   hasAuditLog={(mapId) => auditMapIds.has(mapId)}
                 />
@@ -366,6 +396,13 @@ const handleSearch = async () => {
         record={editRecordForModal}
         onSave={handleSaveEdit}
         onRecordChange={handleRecordChange}
+        onAuditLog={() => {
+          if (editRecordForModal) {
+            setEditOpen(false);
+            setAuditRecord(editRecordForModal);
+            setAuditOpen(true);
+          }
+        }}
       />
       
       {auditRecord && (
@@ -375,6 +412,19 @@ const handleSearch = async () => {
           record={auditRecord}
         />
       )}
+      
+      <MapDetailModal
+        isOpen={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        record={detailRecord}
+        onViewNewTab={handleViewNewTab}
+        onDownload={handleDownload}
+        onEdit={handleEdit}
+        onAuditLog={handleViewAuditLog}
+        hasAuditLog={(mapId) => auditMapIds.has(mapId)}
+        currentUserId={user?.user_id || 0}
+        userRole={user?.role || 'analyst'}
+      />
     </div>
   );
 };

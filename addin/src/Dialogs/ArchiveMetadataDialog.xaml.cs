@@ -30,11 +30,21 @@ namespace ArcLayoutSentinel.Dialogs
         }
         public string CategoryPrefix { get; private set; }
         public string ExportFormat => (ExportFormatComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "PDF";
-        public string ToWhom => ToWhomComboBox.Text ?? "";
-        public string Status => StatusComboBox.Text ?? "Not Started";
+        public int DPI
+        {
+            get
+            {
+                var item = DpiComboBox.SelectedItem as ComboBoxItem;
+                if (item != null && int.TryParse(item.Content?.ToString(), out int dpi))
+                    return dpi;
+                return 300;
+            }
+        }
+        public string ToWhom => ToWhomComboBox.SelectedItem is ComboBoxItem ci ? (ci.Content?.ToString() ?? "") : (ToWhomComboBox.Text ?? "");
+        public string Status => "Complete";
         public string Comment => CommentTextBox.Text ?? "";
-        public string IncomeNum => "";
-        public string OutcomeNum => "";
+        public string IncomeNum => IncomeNumTextBox.Text ?? "";
+        public string OutcomeNum => OutcomeNumTextBox.Text ?? "";
 
         private PreFlightService.PreFlightResult _lastPreFlightResult;
         private List<string> _layoutNames;
@@ -106,8 +116,19 @@ namespace ArcLayoutSentinel.Dialogs
             if (LayoutComboBox.SelectedIndex < 0 && LayoutComboBox.Items.Count > 0)
                 LayoutComboBox.SelectedIndex = 0;
 
-            ToWhomComboBox.Text = existingMap.ToWhom ?? "";
-            StatusComboBox.Text = existingMap.Status ?? "Not Started";
+            IncomeNumTextBox.Text = existingMap.IncomeNum ?? "";
+            OutcomeNumTextBox.Text = existingMap.OutcomeNum ?? "";
+
+            var toWhomValue = existingMap.ToWhom ?? "";
+            for (int i = 0; i < ToWhomComboBox.Items.Count; i++)
+            {
+                if ((ToWhomComboBox.Items[i] as ComboBoxItem)?.Content?.ToString() == toWhomValue)
+                {
+                    ToWhomComboBox.SelectedIndex = i;
+                    break;
+                }
+            }
+
             CommentTextBox.Text = existingMap.Comment ?? "";
 
             PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3B6D11"));
@@ -206,6 +227,18 @@ namespace ArcLayoutSentinel.Dialogs
             if (string.IsNullOrWhiteSpace(Category))
             {
                 MessageBox.Show("Please select a category.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(IncomeNum))
+            {
+                MessageBox.Show("Please enter an Income Number.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(ToWhom))
+            {
+                MessageBox.Show("Please select a recipient (To Whom).", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 

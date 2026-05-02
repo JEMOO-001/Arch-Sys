@@ -15,7 +15,7 @@ class Map(Base):
     income_num = Column(String(50))
     outcome_num = Column(String(50))
     to_whom = Column(String(200))
-    status = Column(String(20), nullable=False, default="Not Started")
+    status = Column(String(20), nullable=False, default="Complete")
     comment = Column(Text)
     file_path = Column(Text, nullable=False)
     analyst_id = Column(Integer, ForeignKey("Users.user_id"), nullable=False, index=True)

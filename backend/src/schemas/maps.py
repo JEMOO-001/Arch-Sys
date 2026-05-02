@@ -11,7 +11,7 @@ class MapBase(BaseModel):
     income_num: Optional[str] = Field(None, max_length=50)
     outcome_num: Optional[str] = Field(None, max_length=50)
     to_whom: Optional[str] = Field(None, max_length=200)
-    status: str = Field(default="Not Started", pattern=r'^(Not Started|In Progress|Complete|On Hold)$')
+    status: str = Field(default="Complete", pattern=r'^(Not Started|In Progress|Complete|On Hold)$')
     comment: Optional[str] = Field(None, max_length=1000)
     file_path: str = Field(..., min_length=1, max_length=500)
     
@@ -54,6 +54,7 @@ class MapResponse(MapBase):
     map_id: int
     unique_id: str
     analyst_id: int
+    tenant_id: int = 1
     created_at: datetime
     updated_at: Optional[datetime] = None
 

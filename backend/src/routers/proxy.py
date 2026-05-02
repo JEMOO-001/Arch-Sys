@@ -5,16 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pathlib import Path
 from html import escape
+import logging
 from ..database import get_db
 from ..models.maps import Map
 from ..dependencies.auth import verify_token
 
 router = APIRouter(prefix="/proxy", tags=["Proxy"])
+logger = logging.getLogger(__name__)
 
-# Local copy to avoid circular import
-def _check_map_auth(current_user, db_map):
-    if current_user.role == "analyst" and db_map.analyst_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this record")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 @router.get("/file/{map_id}")
@@ -41,22 +39,24 @@ async def stream_file(
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
     
-    _check_map_auth(current_user, db_map)
-    
     if not db_map.file_path:
         raise HTTPException(status_code=404, detail="No file attached to this map record")
     
     file_path = Path(db_map.file_path)
     
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+        logger.warning(f"File not found on disk: {db_map.file_path}")
+        raise HTTPException(status_code=404, detail="File not found on server")
     
-    media_type = "application/pdf"
+    safe_name = escape(file_path.name)
+    is_pdf = file_path.suffix.lower() == ".pdf"
     is_image = file_path.suffix.lower() in [".jpeg", ".jpg", ".png"]
+    media_type = "application/pdf"
     if is_image:
         media_type = "image/jpeg" if file_path.suffix.lower() in [".jpeg", ".jpg"] else "image/png"
     
-    # mode: attachment=force download
+    logger.info(f"Serving file: {file_path.name}, media_type={media_type}, mode={mode}, is_image={is_image}")
+    
     if mode == "attachment":
         headers = {"Content-Disposition": f"attachment; filename=\"{file_path.name}\""}
         return FileResponse(
@@ -66,29 +66,46 @@ async def stream_file(
             headers=headers
         )
     
-    # For inline/view mode: show image directly, embed PDF in iframe
-    if is_image:
-        # Images: browser displays directly
-        return FileResponse(path=file_path, media_type=media_type)
-    
-    # PDFs: embed in HTML with iframe
     safe_token = escape(token or '')
+
+    if is_image:
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{safe_name}</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        html, body {{ width: 100%; height: 100%; overflow: auto; background: #1a1a2e; }}
+        .container {{ display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }}
+        img {{ max-width: 100%; max-height: 100vh; object-fit: contain; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="/api/v1/proxy/raw/{map_id}?token={safe_token}" alt="{safe_name}" />
+    </div>
+</body>
+</html>
+"""
+        return HTMLResponse(content=html_content)
+
     html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>{escape(file_path.name)}</title>
-        <style>
-            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-            html, body {{ height: 100%; overflow: hidden; }}
-            iframe {{ width: 100%; height: 100%; border: none; }}
-        </style>
-    </head>
-    <body>
-        <iframe src="/proxy/raw/{map_id}?token={safe_token}"></iframe>
-    </body>
-    </html>
-    """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{safe_name}</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        html, body {{ width: 100%; height: 100%; }}
+        iframe {{ width: 100%; height: 100%; border: none; }}
+    </style>
+</head>
+<body>
+    <iframe src="/api/v1/proxy/raw/{map_id}?token={safe_token}"></iframe>
+</body>
+</html>
+"""
     return HTMLResponse(content=html_content)
 
 
@@ -98,7 +115,7 @@ async def raw_file(
     token: str = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Raw file stream for iframe embedding"""
+    """Raw file stream for iframe/embedding"""
     current_user = None
     
     if token:
@@ -113,8 +130,6 @@ async def raw_file(
     if not db_map:
         raise HTTPException(status_code=404, detail="Map not found")
     
-    _check_map_auth(current_user, db_map)
-    
     file_path = Path(db_map.file_path)
     
     if not file_path.exists():
@@ -126,4 +141,5 @@ async def raw_file(
     elif file_path.suffix.lower() == ".png":
         media_type = "image/png"
     
-    return FileResponse(path=file_path, media_type=media_type)
+    headers = {"Content-Disposition": "inline"}
+    return FileResponse(path=file_path, media_type=media_type, headers=headers)

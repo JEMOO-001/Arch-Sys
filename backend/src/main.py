@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from .middleware.limiter import limiter
-from .middleware.tenant import TenantMiddleware
+from .middleware.tenant import tenant_middleware
 from .routers import users, maps, proxy, stats, auth, categories
 from .core.config import settings
 
@@ -39,17 +39,25 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # 3. Tenant Middleware
-app.add_middleware(TenantMiddleware)
+@app.middleware("http")
+async def add_tenant(request, call_next):
+    return await tenant_middleware(request, call_next)
 
 # 4. Security Headers Middleware
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    
+    if request.url.path.startswith("/api/v1/proxy/"):
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'self'; img-src 'self' data:;"
+    else:
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
+    
     return response
 
 # 4. Router Registration with API versioning

@@ -1,23 +1,21 @@
 using System;
+using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
-using ArcLayoutSentinel.Panes;
+using ArcLayoutSentinel.Services;
+using ArcLayoutSentinel.Dialogs;
 
-namespace ArcLayoutSentinel.Ribbon
+namespace ArcLayoutSentinel
 {
-    /// <summary>
-    /// Connect Button - Toggles the Sentinel Connection DockPane.
-    /// Stability: Uses non-modal DockPane to prevent UI freezes.
-    /// </summary>
     public class ConnectButton : Button
     {
         protected override void OnUpdate()
         {
-            bool isLoggedIn = ArcGIS.Desktop.Framework.FrameworkApplication.State.Contains("sentinel_logged_in_state");
+            bool isLoggedIn = FrameworkApplication.State.Contains("sentinel_logged_in_state");
 
             if (isLoggedIn)
             {
                 this.Caption = "Connected";
-                this.Tooltip = $"Connected to Sentinel as {Services.ConfigManager.LastUsername}";
+                this.Tooltip = $"Connected as {ConfigManager.LastUsername}";
             }
             else
             {
@@ -30,13 +28,29 @@ namespace ArcLayoutSentinel.Ribbon
         {
             try
             {
-                // Force use of DockPane for stability (Zero-SDK UI pattern)
-                LoginDockPaneViewModel.Show();
+                bool isLoggedIn = FrameworkApplication.State.Contains("sentinel_logged_in_state");
+
+                if (isLoggedIn)
+                {
+                    ConfigManager.ClearSession();
+                    Module1.Current.SetLoggedInState(false);
+                }
+                else
+                {
+                    var loginDialog = new LoginDialog();
+                    try { loginDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+                    loginDialog.ShowDialog();
+
+                    if (loginDialog.DialogResult == true)
+                    {
+                        Module1.Current.SetLoggedInState(true);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                    $"Could not open Connection pane:\n{ex.Message}",
+                    $"Error:\n{ex.Message}",
                     "Sentinel Error");
             }
         }

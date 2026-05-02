@@ -23,9 +23,10 @@ interface EditModalProps {
   record: MapRecord | null;
   onSave: (data: MapRecord) => void;
   onRecordChange: (record: MapRecord | null) => void;
+  onAuditLog?: () => void;
 }
 
-export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, onSave, onRecordChange }) => {
+export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, onSave, onRecordChange, onAuditLog }) => {
   const [formData, setFormData] = useState<Partial<MapRecord>>({});
   const [isSaving, setIsSaving] = useState(false);
   const pendingSaveRef = useRef(false);
@@ -84,23 +85,23 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Edit Record: ${record?.unique_id}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={`Edit Record: ${record?.unique_id}`} size="lg">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Input
-            label="Income Number"
+            label="رقم الوارد"
             value={formData.income_num || ''}
             onChange={(e) => setFormData({ ...formData, income_num: e.target.value })}
           />
           <Input
-            label="Outcome Number"
+            label="رقم الصادر"
             value={formData.outcome_num || ''}
             onChange={(e) => setFormData({ ...formData, outcome_num: e.target.value })}
           />
         </div>
 
         <div>
-          <label className="text-sm font-medium text-gray-700">Status</label>
+          <label className="text-sm font-medium text-gray-700">حالة الدراسة</label>
           <select
             className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={formData.status || 'In Progress'}
@@ -114,7 +115,7 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
         </div>
 
         <div>
-          <label className="text-sm font-medium text-gray-700">To Whom</label>
+          <label className="text-sm font-medium text-gray-700">جهه الولاية</label>
           <select
             className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={formData.to_whom || ''}
@@ -143,7 +144,7 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
         </div>
 
         <div>
-          <label className="text-sm font-medium text-gray-700">Comments</label>
+          <label className="text-sm font-medium text-gray-700">ملاحظات</label>
           <textarea
             className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             rows={3}
@@ -153,7 +154,7 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
         </div>
 
         <div className="mt-6 flex items-center justify-between border-t pt-4">
-          <Button variant="ghost" type="button" className="flex items-center gap-2 text-gray-500">
+          <Button variant="ghost" type="button" className="flex items-center gap-2 text-gray-500" onClick={onAuditLog}>
             <History className="h-4 w-4" />
             View Audit Log
           </Button>

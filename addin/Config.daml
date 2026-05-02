@@ -43,12 +43,6 @@
           <tooltip heading="Archive">Archive current layout to Sentinel</tooltip>
         </button>
       </controls>
-
-      <dockPanes>
-        <dockPane id="Sentinel_LoginPane" caption="Sentinel" className="LoginDockPaneViewModel">
-          <content className="LoginDockPaneView" />
-        </dockPane>
-      </dockPanes>
     </insertModule>
   </modules>
 </ArcGIS>

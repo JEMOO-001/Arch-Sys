@@ -33,6 +33,7 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     user_id: int
+    tenant_id: int = 1
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

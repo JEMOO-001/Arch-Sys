@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
-using ArcLayoutSentinel.Panes;
 
 namespace ArcLayoutSentinel
 {

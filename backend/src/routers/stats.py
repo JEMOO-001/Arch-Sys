@@ -14,7 +14,7 @@ async def get_summary_stats(
     current_user: TokenData = Depends(get_current_user)
 ):
     # Calculate totals by status
-    query = select(Map.status, func.count(Map.map_id)).group_by(Map.status)
+    query = select(Map.status, func.count(Map.map_id)).group_by(Map.status).order_by(Map.status)
     result = await db.execute(query)
     rows = result.all()
     

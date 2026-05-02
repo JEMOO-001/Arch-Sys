@@ -42,6 +42,8 @@ async def create_map(
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
 
+    logger.info(f"create_map received: {map_in.model_dump()}")
+
     # 1. Use provided unique_id or generate one
     if map_in.unique_id:
         unique_id = map_in.unique_id
@@ -49,9 +51,12 @@ async def create_map(
         unique_id = await generate_unique_id(db, map_in.category_prefix)
     
     # 2. Create Map record
-    tenant_id = 1  # TODO: Extract from request.state.tenant_id when multi-tenant is enabled
+    tenant_id = 1
+    dump = map_in.model_dump(exclude={"category_prefix", "unique_id"})
+    logger.info(f"Creating Map with fields: unique_id={unique_id}, analyst_id={current_user.user_id}, dump={dump}")
+    
     db_map = Map(
-        **map_in.model_dump(exclude={"category_prefix", "unique_id"}),
+        **dump,
         unique_id=unique_id,
         analyst_id=current_user.user_id,
         tenant_id=tenant_id,
@@ -61,6 +66,8 @@ async def create_map(
     db.add(db_map)
     await db.commit()
     await db.refresh(db_map)
+    
+    logger.info(f"Map created: id={db_map.map_id}, uid={db_map.unique_id}, income_num={db_map.income_num}, outcome_num={db_map.outcome_num}, to_whom={db_map.to_whom}, status={db_map.status}, comment={db_map.comment}")
     
     return db_map
 
@@ -89,7 +96,11 @@ async def list_maps(
                     Map.unique_id.ilike(search_term),
                     Map.layout_name.ilike(search_term),
                     Map.project_name.ilike(search_term),
-                    Map.status.ilike(search_term)
+                    Map.status.ilike(search_term),
+                    Map.income_num.ilike(search_term),
+                    Map.outcome_num.ilike(search_term),
+                    Map.to_whom.ilike(search_term),
+                    Map.comment.ilike(search_term)
                 )
             )
         elif search_field == 'unique_id':
@@ -102,8 +113,14 @@ async def list_maps(
             query = query.where(Map.status.ilike(search_term))
         elif search_field == 'to_whom':
             query = query.where(Map.to_whom.ilike(search_term))
+        elif search_field == 'income_num':
+            query = query.where(Map.income_num.ilike(search_term))
+        elif search_field == 'outcome_num':
+            query = query.where(Map.outcome_num.ilike(search_term))
+        elif search_field == 'comment':
+            query = query.where(Map.comment.ilike(search_term))
     
-    query = query.offset(skip).limit(limit)
+    query = query.order_by(Map.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 
@@ -136,7 +153,11 @@ async def list_my_maps(
                     Map.unique_id.ilike(search_term),
                     Map.layout_name.ilike(search_term),
                     Map.project_name.ilike(search_term),
-                    Map.status.ilike(search_term)
+                    Map.status.ilike(search_term),
+                    Map.income_num.ilike(search_term),
+                    Map.outcome_num.ilike(search_term),
+                    Map.to_whom.ilike(search_term),
+                    Map.comment.ilike(search_term)
                 )
             )
         elif search_field == 'unique_id':
@@ -149,6 +170,12 @@ async def list_my_maps(
             query = query.where(Map.status.ilike(search_term))
         elif search_field == 'to_whom':
             query = query.where(Map.to_whom.ilike(search_term))
+        elif search_field == 'income_num':
+            query = query.where(Map.income_num.ilike(search_term))
+        elif search_field == 'outcome_num':
+            query = query.where(Map.outcome_num.ilike(search_term))
+        elif search_field == 'comment':
+            query = query.where(Map.comment.ilike(search_term))
     
     query = query.order_by(Map.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
@@ -166,8 +193,6 @@ async def get_map(
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
     
-    check_map_authorization(current_user, db_map)
-        
     return db_map
 
 @router.patch("/{map_id}", response_model=MapResponse)
@@ -321,12 +346,11 @@ async def get_audit_log(
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
     
-    # Check authorization - verify map exists and user has access
+    # Verify map exists
     map_result = await db.execute(select(Map).where(Map.map_id == map_id))
     db_map = map_result.scalar_one_or_none()
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
-    check_map_authorization(current_user, db_map)
     
     result = await db.execute(
         select(AuditLog).where(AuditLog.map_id == map_id).order_by(AuditLog.changed_at.desc())

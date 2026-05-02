@@ -12,12 +12,10 @@ using ArcLayoutSentinel.Services;
 using ArcLayoutSentinel.Dialogs;
 using System.Windows;
 
-namespace ArcLayoutSentinel.Ribbon
+namespace ArcLayoutSentinel
 {
     public class ArchiveButton : Button
     {
-        private ArchiveMetadataDialog _currentDialog = null;
-
         protected override async void OnClick()
         {
             try
@@ -66,36 +64,39 @@ namespace ArcLayoutSentinel.Ribbon
                 Logger.Error(ex, "ArchiveButton.OnClick FATAL ERROR");
                 ReportError("Archive Error", ex);
             }
-            finally
-            {
-                _currentDialog = null;
-            }
         }
 
         private async Task HandleCreateNewAsync(dynamic layoutInfo)
         {
-            _currentDialog = new ArchiveMetadataDialog(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName);
-            try { _currentDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
-            _currentDialog.Closed += Dialog_Closed;
+            var dialog = new ArchiveMetadataDialog(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName);
+            try { dialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
 
-            bool? result = _currentDialog.ShowDialog();
+            bool? result = dialog.ShowDialog();
             if (result != true) return;
 
-            var preFlightResult = _currentDialog.GetPreFlightResult();
+            var preFlightResult = dialog.GetPreFlightResult();
             if (preFlightResult == null || !preFlightResult.AllPassed)
             {
                 ShowPreFlightError(preFlightResult);
                 return;
             }
 
-            string layoutName = _currentDialog.SelectedLayout;
-            string categoryPrefix = _currentDialog.CategoryPrefix;
-            string category = _currentDialog.Category;
-            string exportFormat = _currentDialog.ExportFormat;
+            string layoutName = dialog.SelectedLayout;
+            string categoryPrefix = dialog.CategoryPrefix;
+            string category = dialog.Category;
+            string exportFormat = dialog.ExportFormat;
+            int dpi = dialog.DPI;
             string projectUri = layoutInfo.ProjectUri;
             string projectName = string.IsNullOrEmpty(projectUri) ? "" : System.IO.Path.GetFileNameWithoutExtension(projectUri);
+            string incomeNum = dialog.IncomeNum;
+            string outcomeNum = dialog.OutcomeNum;
+            string toWhom = dialog.ToWhom;
+            string status = dialog.Status;
+            string comment = dialog.Comment;
 
-            await ExecuteCreateNewAsync(layoutName, categoryPrefix, projectName, category, exportFormat, projectUri);
+            Logger.Info($"Archive new: layout={layoutName}, category={category}, prefix={categoryPrefix}, income={incomeNum}, outcome={outcomeNum}, toWhom={toWhom}, status={status}");
+
+            await ExecuteCreateNewAsync(layoutName, categoryPrefix, projectName, category, exportFormat, dpi, projectUri, incomeNum, outcomeNum, toWhom, status, comment);
         }
 
         private async Task HandleEditExistingAsync(dynamic layoutInfo)
@@ -109,14 +110,13 @@ namespace ArcLayoutSentinel.Ribbon
             var existingMap = mapSelectionDialog.SelectedMap;
             Logger.Info("Selected map for edit: {UniqueID}", existingMap.UniqueId);
 
-            _currentDialog = new ArchiveMetadataDialog(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName, existingMap);
-            try { _currentDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
-            _currentDialog.Closed += Dialog_Closed;
+            var dialog = new ArchiveMetadataDialog(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName, existingMap);
+            try { dialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
 
-            bool? result = _currentDialog.ShowDialog();
+            bool? result = dialog.ShowDialog();
             if (result != true) return;
 
-            var preFlightResult = _currentDialog.GetPreFlightResult();
+            var preFlightResult = dialog.GetPreFlightResult();
             if (preFlightResult == null || !preFlightResult.AllPassed)
             {
                 ShowPreFlightError(preFlightResult);
@@ -124,22 +124,28 @@ namespace ArcLayoutSentinel.Ribbon
             }
 
             int mapId = existingMap.MapId;
-            string layoutName = _currentDialog.SelectedLayout;
-            string categoryPrefix = _currentDialog.CategoryPrefix;
-            string category = _currentDialog.Category;
-            string exportFormat = _currentDialog.ExportFormat;
+            string layoutName = dialog.SelectedLayout;
+            string categoryPrefix = dialog.CategoryPrefix;
+            string category = dialog.Category;
+            string exportFormat = dialog.ExportFormat;
+            int dpi = dialog.DPI;
             string projectUri = layoutInfo.ProjectUri;
             string projectName = string.IsNullOrEmpty(projectUri) ? "" : System.IO.Path.GetFileNameWithoutExtension(projectUri);
-            string toWhom = _currentDialog.ToWhom;
-            string status = _currentDialog.Status;
-            string comment = _currentDialog.Comment;
+            string incomeNum = dialog.IncomeNum;
+            string outcomeNum = dialog.OutcomeNum;
+            string toWhom = dialog.ToWhom;
+            string status = dialog.Status;
+            string comment = dialog.Comment;
 
-            await ExecuteEditExistingAsync(mapId, layoutName, categoryPrefix, projectName, category, 
-                exportFormat, projectUri, toWhom, status, comment, existingMap.FilePath, existingMap.UniqueId);
+            Logger.Info($"Archive edit: mapId={mapId}, layout={layoutName}, category={category}, prefix={categoryPrefix}, income={incomeNum}, outcome={outcomeNum}, toWhom={toWhom}, status={status}");
+
+            await ExecuteEditExistingAsync(mapId, layoutName, categoryPrefix, projectName, category,
+                exportFormat, dpi, projectUri, incomeNum, outcomeNum, toWhom, status, comment, existingMap.FilePath, existingMap.UniqueId);
         }
 
         private async Task ExecuteCreateNewAsync(string layoutName, string categoryPrefix, string projectName,
-            string category, string exportFormat, string projectUri)
+            string category, string exportFormat, int dpi, string projectUri,
+            string incomeNum, string outcomeNum, string toWhom, string status, string comment)
         {
             string exportedFilePath = null;
             string uniqueId = null;
@@ -164,7 +170,7 @@ namespace ArcLayoutSentinel.Ribbon
 
                 var (exported, exportError) = await QueuedTask.Run(async () =>
                 {
-                    return await ExportService.ExportLayoutAsync(layoutName, exportedFilePath, exportFormat);
+                    return await ExportService.ExportLayoutAsync(layoutName, exportedFilePath, exportFormat, dpi);
                 });
 
                 if (!exported)
@@ -180,7 +186,11 @@ namespace ArcLayoutSentinel.Ribbon
                     project_path = projectUri,
                     project_name = projectName,
                     category = category,
-                    status = "In Progress",
+                    income_num = incomeNum,
+                    outcome_num = outcomeNum,
+                    to_whom = toWhom,
+                    status = status ?? "Complete",
+                    comment = comment,
                     file_path = exportedFilePath,
                     category_prefix = categoryPrefix
                 };
@@ -204,7 +214,8 @@ namespace ArcLayoutSentinel.Ribbon
         }
 
         private async Task ExecuteEditExistingAsync(int mapId, string layoutName, string categoryPrefix, string projectName,
-            string category, string exportFormat, string projectUri, string toWhom, string status, string comment,
+            string category, string exportFormat, int dpi, string projectUri,
+            string incomeNum, string outcomeNum, string toWhom, string status, string comment,
             string existingFilePath, string uniqueId)
         {
             string newExportedFilePath = null;
@@ -221,7 +232,7 @@ namespace ArcLayoutSentinel.Ribbon
 
                 var (exported, exportError) = await QueuedTask.Run(async () =>
                 {
-                    return await ExportService.ExportLayoutAsync(layoutName, newExportedFilePath, exportFormat);
+                    return await ExportService.ExportLayoutAsync(layoutName, newExportedFilePath, exportFormat, dpi);
                 });
 
                 if (!exported)
@@ -236,11 +247,13 @@ namespace ArcLayoutSentinel.Ribbon
                     project_path = projectUri,
                     project_name = projectName,
                     category = category,
-                    file_path = newExportedFilePath,
-                    category_prefix = categoryPrefix,
+                    income_num = incomeNum,
+                    outcome_num = outcomeNum,
                     to_whom = toWhom,
-                    status = status,
-                    comment = comment
+                    status = status ?? "Complete",
+                    comment = comment,
+                    file_path = newExportedFilePath,
+                    category_prefix = categoryPrefix
                 };
 
                 var (success, error) = await ApiService.UpdateMapAsync(mapId, mapMetadata);
@@ -300,11 +313,6 @@ namespace ArcLayoutSentinel.Ribbon
             {
                 try { System.IO.File.Delete(filePath); } catch { }
             }
-        }
-
-        private void Dialog_Closed(object sender, EventArgs e)
-        {
-            _currentDialog = null;
         }
     }
 }
