@@ -227,7 +227,12 @@ async def preview_file(
     elif suffix == ".png":
         media_type = "image/png"
 
-    return FileResponse(path=file_path, media_type=media_type, filename=file_path.name)
+    # Serve inline (not attachment) so browser shows PDF viewer / image viewer
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        headers={"Content-Disposition": "inline"}
+    )
 
 
 @router.get("/raw/{map_id}")

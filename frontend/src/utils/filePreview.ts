@@ -25,10 +25,8 @@ export const openBlobInNewTab = (blob: Blob, title: string, contentType: string)
   if (!tab) return;
 
   const url = window.URL.createObjectURL(blob);
-  
-  // Write complete HTML to avoid navigation away from blob URL
   const isImage = String(contentType).includes('image/');
-  const isPdf = String(contentType).includes('pdf');
+  
   tab.document.write(`<!DOCTYPE html>
 <html lang="en">
 <head>
