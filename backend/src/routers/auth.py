@@ -1,3 +1,4 @@
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
@@ -58,3 +59,11 @@ async def logout():
     response = JSONResponse({"message": "Logout successful"})
     response.delete_cookie(key="access_token")
     return response
+
+
+@router.get("/csrf-token")
+async def get_csrf_token(request: Request):
+    """Generate a secure CSRF token and store in session."""
+    token = secrets.token_urlsafe(32)
+    request.session["csrf_token"] = token
+    return {"csrf_token": token}

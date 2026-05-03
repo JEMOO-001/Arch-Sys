@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';
+import { initializeCsrf } from '../utils/api';
 
 interface User {
   user_id: number;
@@ -28,6 +29,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const initAuth = async () => {
       try {
+        // Initialize CSRF token first
+        await initializeCsrf();
         const res = await axios.get(`${API_URL}/users/me`, {
           withCredentials: true
         });
@@ -50,6 +53,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       withCredentials: true
     });
+    
+    // Refresh CSRF token after login
+    await initializeCsrf();
     
     const userRes = await axios.get(`${API_URL}/users/me`, {
       withCredentials: true

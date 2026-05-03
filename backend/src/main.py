@@ -1,8 +1,10 @@
 import logging
+import secrets
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
+from starlette.middleware.sessions import SessionMiddleware
 from .middleware.limiter import limiter
 from .middleware.tenant import tenant_middleware
 from .routers import users, maps, proxy, stats, auth, categories
@@ -18,6 +20,16 @@ app = FastAPI(title="Sentinel API", version="1.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(429, _rate_limit_exceeded_handler)
 
+# 0. Session Middleware (must be before CSRF)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    session_cookie="sentinel_session",
+    max_age=28800,  # 8 hours
+    same_site="lax",
+    https_only=False,  # Set True in production
+)
+
 # 1. CORS Configuration
 origins = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",")]
 app.add_middleware(
@@ -25,7 +37,7 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "x-csrf-token"],
 )
 
 
@@ -46,14 +58,26 @@ async def add_tenant(request, call_next):
 @app.middleware("http")
 async def csrf_protection(request: Request, call_next):
     if request.method in ["POST", "PUT", "PATCH", "DELETE"]:
-        # Skip CSRF for login/logout (they set/get cookies)
-        if request.url.path in ["/api/v1/auth/login", "/api/v1/auth/logout"]:
+        # Skip CSRF for login/logout/csrf-token endpoints
+        skip_paths = [
+            "/api/v1/auth/login",
+            "/api/v1/auth/logout",
+            "/api/v1/auth/csrf-token",
+        ]
+        if request.url.path in skip_paths:
             return await call_next(request)
 
         csrf_token = request.headers.get("x-csrf-token")
+        session_token = request.session.get("csrf_token")
+
         if not csrf_token:
             return JSONResponse(
                 status_code=403, content={"detail": "Missing CSRF token"}
+            )
+
+        if not session_token or csrf_token != session_token:
+            return JSONResponse(
+                status_code=403, content={"detail": "Invalid CSRF token"}
             )
     return await call_next(request)
 

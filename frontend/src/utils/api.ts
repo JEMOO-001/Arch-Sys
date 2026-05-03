@@ -2,29 +2,73 @@ import axios from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
 
-// Generate a simple CSRF token (in production, this should come from the server)
 let csrfToken: string | null = null;
 
-export const getCsrfToken = (): string => {
-  if (!csrfToken) {
-    csrfToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+/**
+ * Fetch CSRF token from backend and store it.
+ * Must be called before any mutating requests.
+ */
+export const initializeCsrf = async (): Promise<string> => {
+  try {
+    const res = await axios.get(`${API_URL}/auth/csrf-token`, {
+      withCredentials: true,
+    });
+    csrfToken = res.data.csrf_token;
+    return csrfToken;
+  } catch (err) {
+    console.error('Failed to fetch CSRF token:', err);
+    throw err;
   }
-  return csrfToken;
 };
+
+export const getCsrfToken = (): string | null => csrfToken;
 
 // Configure axios defaults
 axios.defaults.withCredentials = true;
 
-// Axios request interceptor to add CSRF token for mutating requests
-axios.interceptors.request.use((config) => {
-  if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
-    if (!config.headers) {
-      config.headers = {} as any;
+// Request interceptor: add CSRF token for mutating requests
+axios.interceptors.request.use(
+  (config) => {
+    if (
+      config.method &&
+      ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())
+    ) {
+      if (!config.headers) {
+        config.headers = {} as any;
+      }
+      (config.headers as any)['x-csrf-token'] = csrfToken || '';
     }
-    (config.headers as any)['x-csrf-token'] = getCsrfToken();
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor: retry on 403 CSRF failure
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (
+      error.response?.status === 403 &&
+      error.response?.data?.detail?.includes('CSRF') &&
+      !originalRequest._retry
+    ) {
+      originalRequest._retry = true;
+      console.warn('CSRF token invalid, refreshing...');
+
+      try {
+        await initializeCsrf();
+        originalRequest.headers['x-csrf-token'] = csrfToken;
+        return axios(originalRequest);
+      } catch (refreshErr) {
+        return Promise.reject(refreshErr);
+      }
+    }
+
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
 export { API_URL };
 export default axios;
