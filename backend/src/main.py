@@ -1,5 +1,4 @@
 import logging
-import secrets
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,7 +11,8 @@ from .core.config import settings
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
@@ -26,8 +26,8 @@ app.add_middleware(
     secret_key=settings.SECRET_KEY,
     session_cookie="sentinel_session",
     max_age=28800,  # 8 hours
-    same_site="strict",
-    https_only=True,
+    same_site="lax",
+    https_only=False,  # Allow HTTP for development
 )
 
 # 1. CORS Configuration
@@ -40,19 +40,19 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "Accept", "x-csrf-token"],
 )
 
-
 # 2. Global Exception Handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled error: {str(exc)}", exc_info=True)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
-
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
 
 # 3. Tenant Middleware
 @app.middleware("http")
 async def add_tenant(request, call_next):
     return await tenant_middleware(request, call_next)
-
 
 # 4. CSRF Protection Middleware
 @app.middleware("http")
@@ -68,7 +68,15 @@ async def csrf_protection(request: Request, call_next):
             return await call_next(request)
 
         csrf_token = request.headers.get("x-csrf-token")
-        session_token = request.session.get("csrf_token")
+        
+        # Check if session middleware is available
+        try:
+            session = request.session
+        except AssertionError:
+            # SessionMiddleware not available, skip CSRF check
+            return await call_next(request)
+        
+        session_token = session.get("csrf_token")
 
         if not csrf_token:
             return JSONResponse(
@@ -81,32 +89,24 @@ async def csrf_protection(request: Request, call_next):
             )
     return await call_next(request)
 
-
 # 5. Security Headers Middleware
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = (
-        "max-age=31536000; includeSubDomains"
-    )
-
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    
     if request.url.path.startswith("/api/v1/proxy/"):
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; frame-ancestors 'self'; img-src 'self' data:;"
-        )
+        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'self'; img-src 'self' data:;"
     else:
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; frame-ancestors 'none';"
-        )
-
+        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
+    
     return response
 
-
-# 4. Router Registration with API versioning
+# 6. Router Registration with API versioning
 API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
@@ -114,7 +114,6 @@ app.include_router(maps.router, prefix=API_PREFIX)
 app.include_router(proxy.router, prefix=API_PREFIX)
 app.include_router(stats.router, prefix=API_PREFIX)
 app.include_router(categories.router, prefix=API_PREFIX)
-
 
 @app.get("/health")
 async def health_check():

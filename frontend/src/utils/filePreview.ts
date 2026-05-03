@@ -7,7 +7,7 @@ type PreviewPayload = {
 
 export const fetchPreviewBlob = async (mapId: number): Promise<PreviewPayload> => {
   const response = await fetch(`${API_URL}/proxy/preview/${mapId}`, {
-    credentials: 'include',  // Send HttpOnly cookies
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -28,6 +28,7 @@ export const openBlobInNewTab = (blob: Blob, title: string, contentType: string)
   
   // Write complete HTML to avoid navigation away from blob URL
   const isImage = String(contentType).includes('image/');
+  const isPdf = String(contentType).includes('pdf');
   tab.document.write(`<!DOCTYPE html>
 <html lang="en">
 <head>

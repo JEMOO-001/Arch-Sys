@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';
-import { initializeCsrf } from '../utils/api';
 
 interface User {
   user_id: number;
@@ -10,8 +9,9 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  token: string | null;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: () => void;
   isLoading: boolean;
 }
 
@@ -19,40 +19,28 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
 
-// Configure axios to send cookies
-axios.defaults.withCredentials = true;
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const initAuth = async () => {
-      try {
-        // Initialize CSRF token first
-        await initializeCsrf();
-        const res = await axios.get(`${API_URL}/users/me`, {
-          withCredentials: true
-        });
-        setUser(res.data);
-      } catch {
-        setUser(null);
-      } finally {
-        setIsLoading(false);
+      const savedToken = localStorage.getItem('token');
+      if (savedToken) {
+        try {
+          const res = await axios.get(`${API_URL}/users/me`, {
+            headers: { Authorization: `Bearer ${savedToken}` }
+          });
+          setUser(res.data);
+        } catch {
+          localStorage.removeItem('token');
+          setToken(null);
+        }
       }
+      setIsLoading(false);
     };
     initAuth();
-    
-    // Refresh CSRF token every hour
-    const interval = setInterval(async () => {
-      try {
-        await initializeCsrf();
-      } catch (err) {
-        console.error('Failed to refresh CSRF token:', err);
-      }
-    }, 3600000);
-    
-    return () => clearInterval(interval);
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -60,33 +48,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     formData.append('username', username);
     formData.append('password', password);
 
-    await axios.post(`${API_URL}/auth/login`, formData, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      withCredentials: true
+    const res = await axios.post(`${API_URL}/auth/login`, formData, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
     
-    // Refresh CSRF token after login
-    await initializeCsrf();
+    const accessToken = res.data.access_token;
+    localStorage.setItem('token', accessToken);
+    setToken(accessToken);
     
     const userRes = await axios.get(`${API_URL}/users/me`, {
-      withCredentials: true
+      headers: { Authorization: `Bearer ${accessToken}` }
     });
     setUser(userRes.data);
   };
 
-  const logout = async () => {
-    try {
-      await axios.post(`${API_URL}/auth/logout`, {}, {
-        withCredentials: true
-      });
-    } catch {
-      // Ignore logout errors
-    }
+  const logout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

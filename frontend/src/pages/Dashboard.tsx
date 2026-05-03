@@ -10,10 +10,19 @@ import { EditModal } from '../components/EditModal';
 import { AuditLogModal } from '../components/AuditLogModal';
 import { MapDetailModal } from '../components/MapDetailModal';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchPreviewBlob, openBlobInNewTab } from '../utils/filePreview';
 import axios from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
+
+const b64ToBlob = (b64: string, contentType: string) => {
+  const byteCharacters = atob(b64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: contentType });
+};
 
 interface Stats {
   total: number;
@@ -72,6 +81,7 @@ export const Dashboard: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<MapRecord | null>(null);
 
+  const token = localStorage.getItem('token');
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
 
   useEffect(() => {
@@ -82,9 +92,11 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const headers = { Authorization: `Bearer ${token}` };
+        
         const [statsRes, mapsRes] = await Promise.all([
-          axios.get(`${API_URL}/stats/summary`, { withCredentials: true }),
-          axios.get(`${API_URL}/maps/`, { withCredentials: true })
+          axios.get(`${API_URL}/stats/summary`, { headers }),
+          axios.get(`${API_URL}/maps/`, { headers })
         ]);
         
         setStats(statsRes.data);
@@ -93,7 +105,7 @@ export const Dashboard: React.FC = () => {
         const mapIds = mapsRes.data.map((m: MapRecord) => m.map_id);
         if (mapIds.length > 0) {
           try {
-            const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { withCredentials: true });
+            const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers });
             const auditIds = new Set<number>((auditBatchRes.data.maps_with_audit || []).map((id: number) => id));
             setAuditMapIds(auditIds);
           } catch (err) {
@@ -102,7 +114,7 @@ export const Dashboard: React.FC = () => {
         }
         
         if (isAdmin) {
-          const analystsRes = await axios.get(`${API_URL}/stats/analysts`, { withCredentials: true });
+          const analystsRes = await axios.get(`${API_URL}/stats/analysts`, { headers });
           setAnalysts(analystsRes.data);
         }
       } catch (err) {
@@ -112,17 +124,19 @@ export const Dashboard: React.FC = () => {
       }
     };
     fetchData();
-  }, [isAdmin]);
+  }, [token, isAdmin]);
   
   useEffect(() => {
+    if (!token) return;
     const interval = setInterval(() => {
-      axios.get(`${API_URL}/maps/`, { withCredentials: true })
+      const headers = { Authorization: `Bearer ${token}` };
+      axios.get(`${API_URL}/maps/`, { headers })
         .then(res => {
           if (res.data && Array.isArray(res.data)) {
             setMaps(res.data);
             const mapIds = res.data.map((m: MapRecord) => m.map_id);
             if (mapIds.length > 0) {
-              axios.post(`${API_URL}/maps/audit/batch`, mapIds, { withCredentials: true })
+              axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers })
                 .then(auditRes => {
                   const auditIds = new Set<number>((auditRes.data.maps_with_audit || []).map((id: number) => id));
                   setAuditMapIds(auditIds);
@@ -134,12 +148,13 @@ export const Dashboard: React.FC = () => {
         .catch(() => {});
     }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [token]);
 
-  const handleSearch = async () => {
+const handleSearch = async () => {
     try {
+      const headers = { Authorization: `Bearer ${token}` };
       const res = await axios.get(`${API_URL}/maps/`, { 
-        withCredentials: true,
+        headers,
         params: { 
           search: search || undefined,
           search_field: searchField || 'all'
@@ -153,9 +168,55 @@ export const Dashboard: React.FC = () => {
 
   const handleViewNewTab = async (record: MapRecord) => {
     try {
-      const { blob, contentType } = await fetchPreviewBlob(record.map_id);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/proxy/preview/${record.map_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      const contentType = payload.media_type || 'application/pdf';
+      const blob = b64ToBlob(payload.data_base64, contentType);
+      const isImage = String(contentType).includes('image/');
+
+      const tab = window.open('', '_blank');
+      if (!tab) return;
+
+      const url = window.URL.createObjectURL(blob);
       const title = record.unique_id ? `Preview: ${record.unique_id}` : 'Preview';
-      openBlobInNewTab(blob, title, contentType);
+
+      tab.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { background: #111827; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .error { color: #f87171; padding: 24px; text-align: center; font-size: 14px; }
+    img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
+    iframe { width: 100vw; height: 100vh; border: 0; }
+  </style>
+</head>
+<body>
+  ${isImage
+    ? `<img src="${url}" alt="preview" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load image. The file may be corrupted or unsupported.</div>'" />`
+    : `<iframe src="${url}" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load PDF. The file may be corrupted or unsupported.</div>'"></iframe>`
+  }
+  <script>
+    (function() {
+      var blobUrl = '${url}';
+      window.addEventListener('beforeunload', function() {
+        if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+      });
+    })();
+  </script>
+</body>
+</html>`);
+      tab.document.close();
     } catch (err) {
       const errTab = window.open('', '_blank');
       if (errTab) {
@@ -185,8 +246,9 @@ export const Dashboard: React.FC = () => {
 
   const handleDownload = async (record: MapRecord) => {
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/proxy/file/${record.map_id}?mode=attachment`, {
-        credentials: 'include'
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       if (!response.ok) {
@@ -238,27 +300,29 @@ export const Dashboard: React.FC = () => {
     const record = updatedRecord || editRecordForModal;
     if (!record) return;
     try {
+      const headers = { Authorization: `Bearer ${token}` };
+      
       const res = await axios.patch(`${API_URL}/maps/${record.map_id}`, {
         status: record.status,
         comment: record.comment,
         income_num: record.income_num,
         outcome_num: record.outcome_num,
         to_whom: record.to_whom,
-      }, { withCredentials: true });
+      }, { headers });
       
       setEditOpen(false);
       
       setSearch('');
-      const mapsRes = await axios.get(`${API_URL}/maps/`, { withCredentials: true });
+      const mapsRes = await axios.get(`${API_URL}/maps/`, { headers });
       setMaps(mapsRes.data);
       
-      const statsRes = await axios.get(`${API_URL}/stats/summary`, { withCredentials: true });
+      const statsRes = await axios.get(`${API_URL}/stats/summary`, { headers });
       setStats(statsRes.data);
 
       const mapIds = mapsRes.data.map((m: MapRecord) => m.map_id);
       if (mapIds.length > 0) {
         try {
-          const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { withCredentials: true });
+          const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers });
           const auditIds = new Set<number>((auditBatchRes.data.maps_with_audit || []).map((id: number) => id));
           setAuditMapIds(auditIds);
         } catch { }
@@ -359,10 +423,7 @@ export const Dashboard: React.FC = () => {
                       <select
                         className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         value={searchField}
-                        onChange={(e) => {
-                          setSearchField(e.target.value);
-                          setSearch('');
-                        }}
+                        onChange={(e) => setSearchField(e.target.value)}
                       >
                         <option value="all" hidden>All Fields</option>
                         <option value="unique_id">ID</option>

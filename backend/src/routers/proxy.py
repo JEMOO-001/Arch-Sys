@@ -37,11 +37,7 @@ def _safe_file_path(raw_path: str) -> Path:
 
 
 async def _get_authorized_file(
-    map_id: int,
-    db: AsyncSession,
-    auth_token: str = None,
-    token: str = None,
-    request: Request = None,
+    map_id: int, db: AsyncSession, auth_token: str = None, token: str = None, request: Request = None
 ):
     current_user = None
 

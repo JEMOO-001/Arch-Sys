@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Download, ExternalLink, FileText, Loader } from 'lucide-react';
 import { Button } from './Button';
-import { fetchPreviewBlob, openBlobInNewTab } from '../utils/filePreview';
 
 interface FileViewerProps {
   isOpen: boolean;
@@ -12,6 +11,16 @@ interface FileViewerProps {
 }
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
+
+const b64ToBlob = (b64: string, contentType: string) => {
+  const byteCharacters = atob(b64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: contentType });
+};
 
 export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, uniqueId }) => {
   const [loading, setLoading] = useState(false);
@@ -39,10 +48,27 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
     setError(null);
     
     try {
-      const { blob, contentType } = await fetchPreviewBlob(mapId);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/proxy/preview/${mapId}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+      
+      const payload = await response.json();
+      const contentType = payload.media_type || 'application/pdf';
+      const blob = b64ToBlob(payload.data_base64, contentType);
+      const isImage = String(contentType).includes('image/');
+      
+      // Create object URL with proper type
       const url = window.URL.createObjectURL(blob);
       setFileUrl(url);
-      setFileType(String(contentType).includes('image/') ? 'image' : 'pdf');
+      setFileType(isImage ? 'image' : 'pdf');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file');
     } finally {
@@ -62,9 +88,55 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
     if (!mapId) return;
     setLoading(true);
     try {
-      const { blob, contentType } = await fetchPreviewBlob(mapId);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/proxy/preview/${mapId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      const contentType = payload.media_type || 'application/pdf';
+      const blob = b64ToBlob(payload.data_base64, contentType);
+      const isImage = String(contentType).includes('image/');
+
+      const tab = window.open('', '_blank');
+      if (!tab) return;
+
+      const url = window.URL.createObjectURL(blob);
       const title = uniqueId ? `Preview: ${uniqueId}` : 'Preview';
-      openBlobInNewTab(blob, title, contentType);
+
+      tab.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { background: #111827; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .error { color: #f87171; padding: 24px; text-align: center; font-size: 14px; }
+    img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
+    iframe { width: 100vw; height: 100vh; border: 0; }
+  </style>
+</head>
+<body>
+  ${isImage
+    ? `<img src="${url}" alt="preview" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load image. The file may be corrupted or unsupported.</div>'" />`
+    : `<iframe src="${url}" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load PDF. The file may be corrupted or unsupported.</div>'"></iframe>`
+  }
+  <script>
+    (function() {
+      var blobUrl = '${url}';
+      window.addEventListener('beforeunload', function() {
+        if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+      });
+    })();
+  </script>
+</body>
+</html>`);
+      tab.document.close();
     } catch (e) {
       const errTab = window.open('', '_blank');
       if (errTab) {
@@ -106,10 +178,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
           {error && (
             <div className="flex h-full flex-col items-center justify-center text-red-500">
               <FileText className="h-12 w-12 mb-2" />
-              <p className="mb-4">Failed to load: {error}</p>
-              <Button variant="secondary" onClick={loadFile}>
-                Retry
-              </Button>
+              <p>Failed to load: {error}</p>
             </div>
           )}
           {fileUrl && !loading && !error && fileType === 'pdf' && (
