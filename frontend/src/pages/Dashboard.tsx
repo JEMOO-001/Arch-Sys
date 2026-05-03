@@ -169,32 +169,25 @@ const handleSearch = async () => {
   const handleViewNewTab = async (record: MapRecord) => {
     const fileUrl = `${API_URL}/proxy/preview/${record.map_id}`;
     
-    // For PDF: open directly in new tab (browser built-in PDF viewer)
-    // For images: fetch blob and display
-    const isPdf = record.file_path?.toLowerCase().endsWith('.pdf');
-    
-    if (isPdf) {
-      // Open PDF directly - browser will use built-in viewer
-      window.open(fileUrl, '_blank');
-      return;
-    }
-    
-    // For images: fetch with cookies and display
     try {
+      // Fetch blob with cookies (required for auth)
       const response = await fetch(fileUrl, { credentials: 'include' });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
       
       const blob = await response.blob();
-      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      const contentType = response.headers.get('content-type') || 'application/pdf';
       const url = window.URL.createObjectURL(blob);
+      const isImage = String(contentType).includes('image/');
       const title = record.unique_id ? `Preview: ${record.unique_id}` : 'Preview';
 
       const tab = window.open('', '_blank');
       if (!tab) return;
 
-      tab.document.write(`<!DOCTYPE html>
+      if (isImage) {
+        // Image: display centered
+        tab.document.write(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -202,8 +195,7 @@ const handleSearch = async () => {
   <title>${title}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
-    body { background: #111827; display: flex; align-items: center; justify-content: center; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111827; display: flex; align-items: center; justify-content: center; }
     img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
     .error { color: #f87171; padding: 24px; text-align: center; }
   </style>
@@ -211,15 +203,33 @@ const handleSearch = async () => {
 <body>
   <img src="${url}" alt="preview" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load image</div>'" />
   <script>
-    (function() {
-      var blobUrl = '${url}';
-      window.addEventListener('beforeunload', function() {
-        if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
-      });
-    })();
+    window.addEventListener('beforeunload', function() { URL.revokeObjectURL('${url}'); });
   </script>
 </body>
 </html>`);
+      } else {
+        // PDF: use iframe so browser shows built-in PDF viewer
+        tab.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111827; }
+    iframe { width: 100vw; height: 100vh; border: 0; }
+    .error { color: #f87171; padding: 24px; text-align: center; font-family: sans-serif; }
+  </style>
+</head>
+<body>
+  <iframe src="${url}" title="PDF Preview"></iframe>
+  <script>
+    window.addEventListener('beforeunload', function() { URL.revokeObjectURL('${url}'); });
+  </script>
+</body>
+</html>`);
+      }
       tab.document.close();
     } catch (err) {
       const errTab = window.open('', '_blank');

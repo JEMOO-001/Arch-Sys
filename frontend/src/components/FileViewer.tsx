@@ -17,10 +17,6 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
-  const [fileType, setFileType] = useState<'pdf' | 'image'>('pdf');
-
-  const isPdf = filePath?.toLowerCase().endsWith('.pdf') || false;
-  const isImage = filePath?.toLowerCase().match(/\.(jpeg|jpg|png)$/) || false;
 
   useEffect(() => {
     if (isOpen && mapId) {
@@ -31,7 +27,6 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
       }
       setFileUrl(null);
       setError(null);
-      setFileType('pdf');
     }
   }, [isOpen, mapId]);
 
@@ -51,12 +46,9 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
         throw new Error(errorText || `HTTP ${response.status}`);
       }
       
-      const contentType = response.headers.get('content-type') || 'application/pdf';
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      
       setFileUrl(url);
-      setFileType(String(contentType).includes('image/') ? 'image' : 'pdf');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file');
     } finally {
@@ -66,47 +58,78 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
 
   const handleDownload = () => {
     if (!fileUrl) return;
+    const isPdf = filePath?.toLowerCase().endsWith('.pdf');
     const a = document.createElement('a');
     a.href = fileUrl;
-    a.download = `${uniqueId}.${fileType === 'image' ? 'jpeg' : 'pdf'}`;
+    a.download = `${uniqueId}.${isPdf ? 'pdf' : 'jpeg'}`;
     a.click();
   };
 
-  const handleOpenNewTab = () => {
+  const handleOpenNewTab = async () => {
     if (!mapId) return;
     
-    const previewUrl = `${API_URL}/proxy/preview/${mapId}`;
-    
-    if (isPdf) {
-      // Open PDF directly in new tab - browser built-in viewer
-      window.open(previewUrl, '_blank');
-    } else {
-      // For images: open blob in new tab
-      if (fileUrl) {
-        const tab = window.open('', '_blank');
-        if (tab) {
-          tab.document.write(`<!DOCTYPE html>
+    try {
+      const response = await fetch(`${API_URL}/proxy/preview/${mapId}`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const contentType = response.headers.get('content-type') || 'application/pdf';
+      const url = window.URL.createObjectURL(blob);
+      const isImage = String(contentType).includes('image/');
+      const title = uniqueId ? `Preview: ${uniqueId}` : 'Preview';
+
+      const tab = window.open('', '_blank');
+      if (!tab) return;
+
+      if (isImage) {
+        tab.document.write(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Preview: ${uniqueId || 'Image'}</title>
+  <title>${title}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #111827; display: flex; align-items: center; justify-content: center; }
     img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
-    .error { color: #f87171; padding: 24px; text-align: center; }
+    .error { color: #f87171; padding: 24px; text-align: center; font-family: sans-serif; }
   </style>
 </head>
 <body>
-  <img src="${fileUrl}" alt="preview" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load image</div>'" />
+  <img src="${url}" alt="preview" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load image</div>'" />
+  <script>window.addEventListener('beforeunload', function() { URL.revokeObjectURL('${url}'); });</script>
 </body>
 </html>`);
-          tab.document.close();
-        }
+      } else {
+        tab.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111827; }
+    iframe { width: 100vw; height: 100vh; border: 0; }
+    .error { color: #f87171; padding: 24px; text-align: center; font-family: sans-serif; }
+  </style>
+</head>
+<body>
+  <iframe src="${url}" title="PDF Preview"></iframe>
+  <script>window.addEventListener('beforeunload', function() { URL.revokeObjectURL('${url}'); });</script>
+</body>
+</html>`);
       }
+      tab.document.close();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to open preview');
     }
   };
+
+  const isPdf = filePath?.toLowerCase().endsWith('.pdf');
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Viewing: ${uniqueId}`} size="lg">
@@ -126,14 +149,14 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
               </Button>
             </div>
           )}
-          {fileUrl && !loading && !error && fileType === 'pdf' && (
+          {fileUrl && !loading && !error && isPdf && (
             <iframe
               src={fileUrl}
               className="h-full w-full"
-              title="Map Preview"
+              title="PDF Preview"
             />
           )}
-          {fileUrl && !loading && !error && fileType === 'image' && (
+          {fileUrl && !loading && !error && !isPdf && (
             <div className="flex h-full w-full items-center justify-center bg-black/5 p-2">
               <img
                 src={fileUrl}
