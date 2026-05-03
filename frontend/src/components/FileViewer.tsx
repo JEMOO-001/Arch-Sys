@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Download, ExternalLink, FileText, Loader } from 'lucide-react';
 import { Button } from './Button';
+import { fetchPreviewBlob, openBlobInNewTab } from '../utils/filePreview';
 
 interface FileViewerProps {
   isOpen: boolean;
@@ -11,16 +12,6 @@ interface FileViewerProps {
 }
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
-
-const b64ToBlob = (b64: string, contentType: string) => {
-  const byteCharacters = atob(b64);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  const byteArray = new Uint8Array(byteNumbers);
-  return new Blob([byteArray], { type: contentType });
-};
 
 export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, uniqueId }) => {
   const [loading, setLoading] = useState(false);
@@ -32,6 +23,9 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
     if (isOpen && mapId) {
       loadFile();
     } else if (!isOpen) {
+      if (fileUrl) {
+        window.URL.revokeObjectURL(fileUrl);
+      }
       setFileUrl(null);
       setError(null);
       setFileType('pdf');
@@ -45,27 +39,10 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
     setError(null);
     
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/proxy/preview/${mapId}`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP ${response.status}`);
-      }
-      
-      const payload = await response.json();
-      const contentType = payload.media_type || 'application/pdf';
-      const blob = b64ToBlob(payload.data_base64, contentType);
-      const isImage = String(contentType).includes('image/');
-      
-      // Create object URL with proper type
+      const { blob, contentType } = await fetchPreviewBlob(mapId);
       const url = window.URL.createObjectURL(blob);
       setFileUrl(url);
-      setFileType(isImage ? 'image' : 'pdf');
+      setFileType(String(contentType).includes('image/') ? 'image' : 'pdf');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file');
     } finally {
@@ -83,36 +60,37 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
 
   const handleOpenNewTab = async () => {
     if (!mapId) return;
-    const tab = window.open('', '_blank');
-    if (!tab) return;
-    tab.document.write('<html><body style="font-family:sans-serif;padding:16px">Loading preview...</body></html>');
+    setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/proxy/preview/${mapId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const payload = await response.json();
-      const contentType = payload.media_type || 'application/pdf';
-      const blob = b64ToBlob(payload.data_base64, contentType);
-      const url = window.URL.createObjectURL(blob);
-      const isImage = String(contentType).includes('image/');
-      tab.document.write(`
-        <html>
-          <body style="margin:0;background:#111827;display:flex;align-items:center;justify-content:center;min-height:100vh">
-            ${isImage
-              ? `<img src="${url}" style="max-width:95vw;max-height:95vh;object-fit:contain" alt="preview" />`
-              : `<iframe src="${url}" style="width:100vw;height:100vh;border:0"></iframe>`
-            }
-          </body>
-        </html>
-      `);
-      tab.document.close();
+      const { blob, contentType } = await fetchPreviewBlob(mapId);
+      const title = uniqueId ? `Preview: ${uniqueId}` : 'Preview';
+      openBlobInNewTab(blob, title, contentType);
     } catch (e) {
-      tab.document.write('<html><body style="font-family:sans-serif;padding:16px;color:#b91c1c">Failed to load preview.</body></html>');
-      tab.document.close();
+      const errTab = window.open('', '_blank');
+      if (errTab) {
+        errTab.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Preview Error</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; background: #111827; color: #f87171; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .error-box { text-align: center; }
+    .error-box h2 { margin-bottom: 8px; font-size: 18px; }
+    .error-box p { font-size: 14px; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="error-box">
+    <h2>Failed to load preview</h2>
+    <p>${e instanceof Error ? e.message : 'Unknown error occurred'}</p>
+  </div>
+</body>
+</html>`);
+        errTab.document.close();
+      }
+    } finally {
+      setLoading(false);
     }
   };
 

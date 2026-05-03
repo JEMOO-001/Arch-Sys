@@ -2,11 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
-from typing import List, Optional
+from typing import List, Optional, Literal
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+from fastapi import Request
 
 from ..database import get_db
+from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 from ..models.maps import Map, AuditLog
@@ -16,6 +19,50 @@ from ..dependencies.auth import get_current_user, TokenData
 from ..services.audit import log_change, log_multiple_changes
 
 router = APIRouter(prefix="/maps", tags=["Maps"])
+SEARCH_FIELDS = ("all", "unique_id", "layout_name", "project_name", "status", "to_whom", "income_num", "outcome_num", "comment")
+APP_TIMEZONE = ZoneInfo(settings.TIMEZONE)
+
+
+def get_tenant_id(request: Request) -> int:
+    return int(getattr(request.state, "tenant_id", 1))
+
+
+def escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def build_search_filter(query, search_field: str, search_term: str):
+    term = f"%{escape_like(search_term)}%"
+    if search_field == "all":
+        return query.where(
+            or_(
+                Map.unique_id.ilike(term, escape="\\"),
+                Map.layout_name.ilike(term, escape="\\"),
+                Map.project_name.ilike(term, escape="\\"),
+                Map.status.ilike(term, escape="\\"),
+                Map.income_num.ilike(term, escape="\\"),
+                Map.outcome_num.ilike(term, escape="\\"),
+                Map.to_whom.ilike(term, escape="\\"),
+                Map.comment.ilike(term, escape="\\")
+            )
+        )
+    if search_field == "unique_id":
+        return query.where(Map.unique_id.ilike(term, escape="\\"))
+    if search_field == "layout_name":
+        return query.where(Map.layout_name.ilike(term, escape="\\"))
+    if search_field == "project_name":
+        return query.where(Map.project_name.ilike(term, escape="\\"))
+    if search_field == "status":
+        return query.where(Map.status.ilike(term, escape="\\"))
+    if search_field == "to_whom":
+        return query.where(Map.to_whom.ilike(term, escape="\\"))
+    if search_field == "income_num":
+        return query.where(Map.income_num.ilike(term, escape="\\"))
+    if search_field == "outcome_num":
+        return query.where(Map.outcome_num.ilike(term, escape="\\"))
+    if search_field == "comment":
+        return query.where(Map.comment.ilike(term, escape="\\"))
+    return query
 
 
 def check_map_authorization(current_user: TokenData, db_map: Map):
@@ -36,6 +83,7 @@ async def get_next_id(
 @router.post("/", response_model=MapResponse)
 async def create_map(
     map_in: MapCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
@@ -51,7 +99,7 @@ async def create_map(
         unique_id = await generate_unique_id(db, map_in.category_prefix)
     
     # 2. Create Map record
-    tenant_id = 1
+    tenant_id = get_tenant_id(request)
     dump = map_in.model_dump(exclude={"category_prefix", "unique_id"})
     logger.info(f"Creating Map with fields: unique_id={unique_id}, analyst_id={current_user.user_id}, dump={dump}")
     
@@ -60,7 +108,7 @@ async def create_map(
         unique_id=unique_id,
         analyst_id=current_user.user_id,
         tenant_id=tenant_id,
-        created_at=datetime.now(timezone.utc) + timedelta(hours=3)
+        created_at=datetime.now(APP_TIMEZONE)
     )
     
     db.add(db_map)
@@ -73,52 +121,23 @@ async def create_map(
 
 @router.get("/", response_model=List[MapResponse])
 async def list_maps(
+    request: Request,
     search: Optional[str] = None,
-    search_field: Optional[str] = "all",
+    search_field: Literal["all", "unique_id", "layout_name", "project_name", "status", "to_whom", "income_num", "outcome_num", "comment"] = "all",
     status: Optional[str] = None,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
-    tenant_id = 1  # TODO: Extract from request.state.tenant_id when multi-tenant is enabled
+    tenant_id = get_tenant_id(request)
     query = select(Map).where(Map.tenant_id == tenant_id)
     
     if status:
         query = query.where(Map.status == status)
     
     if search:
-        search_term = f"%{search}%"
-        
-        if search_field == 'all':
-            query = query.where(
-                or_(
-                    Map.unique_id.ilike(search_term),
-                    Map.layout_name.ilike(search_term),
-                    Map.project_name.ilike(search_term),
-                    Map.status.ilike(search_term),
-                    Map.income_num.ilike(search_term),
-                    Map.outcome_num.ilike(search_term),
-                    Map.to_whom.ilike(search_term),
-                    Map.comment.ilike(search_term)
-                )
-            )
-        elif search_field == 'unique_id':
-            query = query.where(Map.unique_id.ilike(search_term))
-        elif search_field == 'layout_name':
-            query = query.where(Map.layout_name.ilike(search_term))
-        elif search_field == 'project_name':
-            query = query.where(Map.project_name.ilike(search_term))
-        elif search_field == 'status':
-            query = query.where(Map.status.ilike(search_term))
-        elif search_field == 'to_whom':
-            query = query.where(Map.to_whom.ilike(search_term))
-        elif search_field == 'income_num':
-            query = query.where(Map.income_num.ilike(search_term))
-        elif search_field == 'outcome_num':
-            query = query.where(Map.outcome_num.ilike(search_term))
-        elif search_field == 'comment':
-            query = query.where(Map.comment.ilike(search_term))
+        query = build_search_filter(query, search_field, search)
     
     query = query.order_by(Map.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
@@ -126,11 +145,12 @@ async def list_maps(
 
 @router.get("/my", response_model=List[MapResponse])
 async def list_my_maps(
+    request: Request,
     search: Optional[str] = None,
-    search_field: Optional[str] = "all",
+    search_field: Literal["all", "unique_id", "layout_name", "project_name", "status", "to_whom", "income_num", "outcome_num", "comment"] = "all",
     status_filter: Optional[str] = Query(None, alias="status"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
@@ -138,44 +158,14 @@ async def list_my_maps(
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
     
-    tenant_id = 1
+    tenant_id = get_tenant_id(request)
     query = select(Map).where(Map.analyst_id == current_user.user_id, Map.tenant_id == tenant_id)
     
     if status_filter:
         query = query.where(Map.status == status_filter)
     
     if search:
-        search_term = f"%{search}%"
-        
-        if search_field == 'all':
-            query = query.where(
-                or_(
-                    Map.unique_id.ilike(search_term),
-                    Map.layout_name.ilike(search_term),
-                    Map.project_name.ilike(search_term),
-                    Map.status.ilike(search_term),
-                    Map.income_num.ilike(search_term),
-                    Map.outcome_num.ilike(search_term),
-                    Map.to_whom.ilike(search_term),
-                    Map.comment.ilike(search_term)
-                )
-            )
-        elif search_field == 'unique_id':
-            query = query.where(Map.unique_id.ilike(search_term))
-        elif search_field == 'layout_name':
-            query = query.where(Map.layout_name.ilike(search_term))
-        elif search_field == 'project_name':
-            query = query.where(Map.project_name.ilike(search_term))
-        elif search_field == 'status':
-            query = query.where(Map.status.ilike(search_term))
-        elif search_field == 'to_whom':
-            query = query.where(Map.to_whom.ilike(search_term))
-        elif search_field == 'income_num':
-            query = query.where(Map.income_num.ilike(search_term))
-        elif search_field == 'outcome_num':
-            query = query.where(Map.outcome_num.ilike(search_term))
-        elif search_field == 'comment':
-            query = query.where(Map.comment.ilike(search_term))
+        query = build_search_filter(query, search_field, search)
     
     query = query.order_by(Map.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
@@ -192,7 +182,8 @@ async def get_map(
     
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
-    
+
+    check_map_authorization(current_user, db_map)
     return db_map
 
 @router.patch("/{map_id}", response_model=MapResponse)
@@ -285,7 +276,7 @@ async def reexport_map(
             combined = "\n".join(changes_list)
             await log_change(db, map_id, current_user.user_id, "batch", combined, "")
     
-    db_map.updated_at = datetime.now(timezone.utc) + timedelta(hours=3)
+    db_map.updated_at = datetime.now(APP_TIMEZONE)
     
     await db.commit()
     await db.refresh(db_map)
@@ -351,6 +342,7 @@ async def get_audit_log(
     db_map = map_result.scalar_one_or_none()
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
+    check_map_authorization(current_user, db_map)
     
     result = await db.execute(
         select(AuditLog).where(AuditLog.map_id == map_id).order_by(AuditLog.changed_at.desc())
@@ -372,6 +364,7 @@ async def get_audit_log(
 
 @router.post("/audit/batch")
 async def check_audit_logs_batch(
+    request: Request,
     map_ids: List[int],
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
@@ -379,9 +372,12 @@ async def check_audit_logs_batch(
     """Check which maps have audit logs (batch). Returns list of map_ids that have changes."""
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+    if len(map_ids) > 500:
+        raise HTTPException(status_code=413, detail="Too many map IDs")
     
+    tenant_id = get_tenant_id(request)
     result = await db.execute(
-        select(AuditLog.map_id).where(AuditLog.map_id.in_(map_ids)).distinct()
+        select(AuditLog.map_id).where(AuditLog.map_id.in_(map_ids), AuditLog.tenant_id == tenant_id).distinct()
     )
     maps_with_audit = [row[0] for row in result.fetchall()]
     

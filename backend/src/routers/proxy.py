@@ -6,15 +6,26 @@ from sqlalchemy import select
 from pathlib import Path
 from html import escape
 import logging
-import base64
 from ..database import get_db
+from ..core.config import settings
 from ..models.maps import Map
 from ..dependencies.auth import verify_token
 
 router = APIRouter(prefix="/proxy", tags=["Proxy"])
 logger = logging.getLogger(__name__)
+ARCHIVE_ROOT = Path(settings.ARCHIVE_ROOT_PATH).resolve()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
+
+
+def _safe_file_path(raw_path: str) -> Path:
+    file_path = Path(raw_path).expanduser()
+    resolved = file_path.resolve(strict=False)
+    try:
+        resolved.relative_to(ARCHIVE_ROOT)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="File path outside archive root")
+    return resolved
 
 
 async def _get_authorized_file(map_id: int, db: AsyncSession, auth_token: str = None, token: str = None):
@@ -37,7 +48,7 @@ async def _get_authorized_file(map_id: int, db: AsyncSession, auth_token: str = 
     if not db_map.file_path:
         raise HTTPException(status_code=404, detail="No file attached to this map record")
 
-    file_path = Path(db_map.file_path)
+    file_path = _safe_file_path(db_map.file_path)
     if not file_path.exists():
         logger.warning(f"File not found on disk: {db_map.file_path}")
         raise HTTPException(status_code=404, detail="File not found on server")
@@ -53,7 +64,7 @@ async def stream_file(
     auth_token: str = Depends(oauth2_scheme),
 ):
     file_path = await _get_authorized_file(map_id, db, auth_token=auth_token, token=token)
-    
+
     safe_name = escape(file_path.name)
     is_pdf = file_path.suffix.lower() == ".pdf"
     is_image = file_path.suffix.lower() in [".jpeg", ".jpg", ".png"]
@@ -150,7 +161,7 @@ async def preview_file(
     db: AsyncSession = Depends(get_db),
     auth_token: str = Depends(oauth2_scheme),
 ):
-    """Return preview payload as JSON to avoid download-manager interception."""
+    """Return inline file response for preview."""
     file_path = await _get_authorized_file(map_id, db, auth_token=auth_token)
 
     media_type = "application/pdf"
@@ -160,13 +171,7 @@ async def preview_file(
     elif suffix == ".png":
         media_type = "image/png"
 
-    file_bytes = file_path.read_bytes()
-    data_b64 = base64.b64encode(file_bytes).decode("ascii")
-    return {
-        "media_type": media_type,
-        "filename": file_path.name,
-        "data_base64": data_b64,
-    }
+    return FileResponse(path=file_path, media_type=media_type, filename=file_path.name)
 
 
 @router.get("/raw/{map_id}")
@@ -190,7 +195,7 @@ async def raw_file(
     if not db_map:
         raise HTTPException(status_code=404, detail="Map not found")
     
-    file_path = Path(db_map.file_path)
+    file_path = _safe_file_path(db_map.file_path)
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
