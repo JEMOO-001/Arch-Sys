@@ -83,6 +83,10 @@ async def stream_file(
     # Size limit for downloads
     file_size = file_path.stat().st_size
     if file_size > MAX_DOWNLOAD_SIZE:
+        logger.warning(
+            f"Download blocked: map_id={map_id}, size={file_size} bytes, "
+            f"limit={MAX_DOWNLOAD_SIZE} bytes"
+        )
         raise HTTPException(
             status_code=413,
             detail=f"File exceeds {settings.MAX_DOWNLOAD_SIZE_MB}MB download limit",
@@ -198,6 +202,10 @@ async def preview_file(
     # Size limit for preview
     file_size = file_path.stat().st_size
     if file_size > MAX_PREVIEW_SIZE:
+        logger.warning(
+            f"Preview blocked: map_id={map_id}, size={file_size} bytes, "
+            f"limit={MAX_PREVIEW_SIZE} bytes"
+        )
         raise HTTPException(
             status_code=413,
             detail=f"File exceeds {settings.MAX_PREVIEW_SIZE_MB}MB preview limit",
@@ -242,9 +250,13 @@ async def raw_file(
     # Size limit for raw stream
     file_size = file_path.stat().st_size
     if file_size > MAX_PREVIEW_SIZE:
+        logger.warning(
+            f"Raw stream blocked: map_id={map_id}, size={file_size} bytes, "
+            f"limit={MAX_PREVIEW_SIZE} bytes"
+        )
         raise HTTPException(
             status_code=413,
-            detail=f"File exceeds {settings.MAX_PREVIEW_SIZE_MB}MB preview limit",
+            detail=f"File exceeds {settings.MAX_PREVIEW_SIZE_MB}MB size limit",
         )
 
     media_type = "application/pdf"
