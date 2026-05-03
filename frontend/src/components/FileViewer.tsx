@@ -106,7 +106,10 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
           {error && (
             <div className="flex h-full flex-col items-center justify-center text-red-500">
               <FileText className="h-12 w-12 mb-2" />
-              <p>Failed to load: {error}</p>
+              <p className="mb-4">Failed to load: {error}</p>
+              <Button variant="secondary" onClick={loadFile}>
+                Retry
+              </Button>
             </div>
           )}
           {fileUrl && !loading && !error && fileType === 'pdf' && (
