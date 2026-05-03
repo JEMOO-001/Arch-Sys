@@ -15,16 +15,24 @@ router = APIRouter(prefix="/proxy", tags=["Proxy"])
 logger = logging.getLogger(__name__)
 ARCHIVE_ROOT = Path(settings.ARCHIVE_ROOT_PATH).resolve()
 
+# Configurable size limits
+MAX_PREVIEW_SIZE = settings.MAX_PREVIEW_SIZE_MB * 1024 * 1024
+MAX_DOWNLOAD_SIZE = settings.MAX_DOWNLOAD_SIZE_MB * 1024 * 1024
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 
 def _safe_file_path(raw_path: str) -> Path:
+    """Validate file path is within archive root. Returns 403 if traversal detected."""
     file_path = Path(raw_path).expanduser()
     resolved = file_path.resolve(strict=False)
     try:
         resolved.relative_to(ARCHIVE_ROOT)
     except ValueError:
-        raise HTTPException(status_code=403, detail="File path outside archive root")
+        logger.warning(f"Path traversal attempt blocked: {raw_path}")
+        raise HTTPException(
+            status_code=403, detail="Access denied - file outside archive root"
+        )
     return resolved
 
 
@@ -71,6 +79,14 @@ async def stream_file(
     file_path = await _get_authorized_file(
         map_id, db, auth_token=auth_token, token=token
     )
+
+    # Size limit for downloads
+    file_size = file_path.stat().st_size
+    if file_size > MAX_DOWNLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds {settings.MAX_DOWNLOAD_SIZE_MB}MB download limit",
+        )
 
     safe_name = escape(file_path.name)
     is_pdf = file_path.suffix.lower() == ".pdf"
@@ -179,10 +195,13 @@ async def preview_file(
     """Return inline file response for preview."""
     file_path = await _get_authorized_file(map_id, db, auth_token=auth_token)
 
-    # Size limit: 50MB max for preview
+    # Size limit for preview
     file_size = file_path.stat().st_size
-    if file_size > 50 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large for preview")
+    if file_size > MAX_PREVIEW_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds {settings.MAX_PREVIEW_SIZE_MB}MB preview limit",
+        )
 
     media_type = "application/pdf"
     suffix = file_path.suffix.lower()
@@ -220,10 +239,13 @@ async def raw_file(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Size limit: 50MB max for raw stream
+    # Size limit for raw stream
     file_size = file_path.stat().st_size
-    if file_size > 50 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large")
+    if file_size > MAX_PREVIEW_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds {settings.MAX_PREVIEW_SIZE_MB}MB preview limit",
+        )
 
     media_type = "application/pdf"
     if file_path.suffix.lower() in [".jpeg", ".jpg"]:

@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str
@@ -8,8 +9,11 @@ class Settings(BaseSettings):
     ARCHIVE_ROOT_PATH: str
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:4173"
     TIMEZONE: str = "Africa/Cairo"
+    MAX_PREVIEW_SIZE_MB: int = 50
+    MAX_DOWNLOAD_SIZE_MB: int = 500
 
     class Config:
         env_file = ".env"
+
 
 settings = Settings()
