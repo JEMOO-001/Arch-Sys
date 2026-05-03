@@ -40,8 +40,12 @@ async def login_for_access_token(
         expires_delta=access_token_expires
     )
     
-    # 3. Set HttpOnly cookie
-    response = JSONResponse({"message": "Login successful"})
+    # 3. Return token in body (for addin) AND set HttpOnly cookie (for frontend)
+    response = JSONResponse({
+        "access_token": access_token,
+        "token_type": "bearer",
+        "message": "Login successful"
+    })
     response.set_cookie(
         key="access_token",
         value=access_token,
