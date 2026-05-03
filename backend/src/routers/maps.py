@@ -446,8 +446,15 @@ async def check_audit_logs_batch(
     """Check which maps have audit logs (batch). Returns list of map_ids that have changes."""
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
-    if len(map_ids) > 500:
-        raise HTTPException(status_code=413, detail="Too many map IDs")
+    if len(map_ids) > settings.MAX_AUDIT_BATCH_SIZE:
+        logger.warning(
+            f"Audit batch limit exceeded: user={current_user.user_id}, "
+            f"count={len(map_ids)}, limit={settings.MAX_AUDIT_BATCH_SIZE}"
+        )
+        raise HTTPException(
+            status_code=413,
+            detail=f"Too many map IDs (max {settings.MAX_AUDIT_BATCH_SIZE})",
+        )
 
     tenant_id = get_tenant_id(request)
     result = await db.execute(

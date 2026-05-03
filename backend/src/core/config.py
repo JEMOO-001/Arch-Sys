@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     TIMEZONE: str = "Africa/Cairo"
     MAX_PREVIEW_SIZE_MB: int = 50
     MAX_DOWNLOAD_SIZE_MB: int = 500
+    MAX_AUDIT_BATCH_SIZE: int = 500
 
     class Config:
         env_file = ".env"
