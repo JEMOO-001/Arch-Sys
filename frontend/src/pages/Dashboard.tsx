@@ -72,7 +72,6 @@ export const Dashboard: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<MapRecord | null>(null);
 
-  const token = localStorage.getItem('token');
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
 
   useEffect(() => {
@@ -83,11 +82,9 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const headers = { Authorization: `Bearer ${token}` };
-        
         const [statsRes, mapsRes] = await Promise.all([
-          axios.get(`${API_URL}/stats/summary`, { headers }),
-          axios.get(`${API_URL}/maps/`, { headers })
+          axios.get(`${API_URL}/stats/summary`, { withCredentials: true }),
+          axios.get(`${API_URL}/maps/`, { withCredentials: true })
         ]);
         
         setStats(statsRes.data);
@@ -96,7 +93,7 @@ export const Dashboard: React.FC = () => {
         const mapIds = mapsRes.data.map((m: MapRecord) => m.map_id);
         if (mapIds.length > 0) {
           try {
-            const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers });
+            const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { withCredentials: true });
             const auditIds = new Set<number>((auditBatchRes.data.maps_with_audit || []).map((id: number) => id));
             setAuditMapIds(auditIds);
           } catch (err) {
@@ -105,7 +102,7 @@ export const Dashboard: React.FC = () => {
         }
         
         if (isAdmin) {
-          const analystsRes = await axios.get(`${API_URL}/stats/analysts`, { headers });
+          const analystsRes = await axios.get(`${API_URL}/stats/analysts`, { withCredentials: true });
           setAnalysts(analystsRes.data);
         }
       } catch (err) {
@@ -115,19 +112,17 @@ export const Dashboard: React.FC = () => {
       }
     };
     fetchData();
-  }, [token, isAdmin]);
+  }, [isAdmin]);
   
   useEffect(() => {
-    if (!token) return;
     const interval = setInterval(() => {
-      const headers = { Authorization: `Bearer ${token}` };
-      axios.get(`${API_URL}/maps/`, { headers })
+      axios.get(`${API_URL}/maps/`, { withCredentials: true })
         .then(res => {
           if (res.data && Array.isArray(res.data)) {
             setMaps(res.data);
             const mapIds = res.data.map((m: MapRecord) => m.map_id);
             if (mapIds.length > 0) {
-              axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers })
+              axios.post(`${API_URL}/maps/audit/batch`, mapIds, { withCredentials: true })
                 .then(auditRes => {
                   const auditIds = new Set<number>((auditRes.data.maps_with_audit || []).map((id: number) => id));
                   setAuditMapIds(auditIds);
@@ -139,13 +134,12 @@ export const Dashboard: React.FC = () => {
         .catch(() => {});
     }, 10000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, []);
 
   const handleSearch = async () => {
     try {
-      const headers = { Authorization: `Bearer ${token}` };
       const res = await axios.get(`${API_URL}/maps/`, { 
-        headers,
+        withCredentials: true,
         params: { 
           search: search || undefined,
           search_field: searchField || 'all'
@@ -191,9 +185,8 @@ export const Dashboard: React.FC = () => {
 
   const handleDownload = async (record: MapRecord) => {
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/proxy/file/${record.map_id}?mode=attachment`, {
-        headers: { Authorization: `Bearer ${token}` }
+        credentials: 'include'
       });
       
       if (!response.ok) {
@@ -245,29 +238,27 @@ export const Dashboard: React.FC = () => {
     const record = updatedRecord || editRecordForModal;
     if (!record) return;
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      
       const res = await axios.patch(`${API_URL}/maps/${record.map_id}`, {
         status: record.status,
         comment: record.comment,
         income_num: record.income_num,
         outcome_num: record.outcome_num,
         to_whom: record.to_whom,
-      }, { headers });
+      }, { withCredentials: true });
       
       setEditOpen(false);
       
       setSearch('');
-      const mapsRes = await axios.get(`${API_URL}/maps/`, { headers });
+      const mapsRes = await axios.get(`${API_URL}/maps/`, { withCredentials: true });
       setMaps(mapsRes.data);
       
-      const statsRes = await axios.get(`${API_URL}/stats/summary`, { headers });
+      const statsRes = await axios.get(`${API_URL}/stats/summary`, { withCredentials: true });
       setStats(statsRes.data);
 
       const mapIds = mapsRes.data.map((m: MapRecord) => m.map_id);
       if (mapIds.length > 0) {
         try {
-          const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers });
+          const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { withCredentials: true });
           const auditIds = new Set<number>((auditBatchRes.data.maps_with_audit || []).map((id: number) => id));
           setAuditMapIds(auditIds);
         } catch { }

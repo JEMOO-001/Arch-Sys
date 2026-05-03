@@ -150,6 +150,7 @@ async def init_database():
             ('General', 'GN', 'General purpose maps'),
             ('Topographic', 'TP', 'Topographic maps'),
             ('Satellite', 'ST', 'Satellite imagery'),
+            ('Administrative', 'AD', 'Administrative maps'),
         ]
         for name, prefix, desc in categories:
             await conn.execute(text(f"""

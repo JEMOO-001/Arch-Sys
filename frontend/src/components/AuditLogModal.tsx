@@ -27,13 +27,10 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, r
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  const token = localStorage.getItem('token');
-  
   useEffect(() => {
-    if (isOpen && record && token) {
+    if (isOpen && record) {
       setIsLoading(true);
-      const headers = { Authorization: `Bearer ${token}` };
-      axios.get(`${API_URL}/maps/${record.map_id}/audit`, { headers })
+      axios.get(`${API_URL}/maps/${record.map_id}/audit`, { withCredentials: true })
         .then(res => {
           setAuditLog(res.data || []);
         })
@@ -45,7 +42,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, r
           setIsLoading(false);
         });
     }
-  }, [isOpen, record, token]);
+  }, [isOpen, record]);
   
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Audit Log: ${record?.unique_id || ''}`}>

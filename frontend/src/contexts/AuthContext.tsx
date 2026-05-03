@@ -9,9 +9,8 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -19,26 +18,25 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
 
+// Configure axios to send cookies
+axios.defaults.withCredentials = true;
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const initAuth = async () => {
-      const savedToken = localStorage.getItem('token');
-      if (savedToken) {
-        try {
-          const res = await axios.get(`${API_URL}/users/me`, {
-            headers: { Authorization: `Bearer ${savedToken}` }
-          });
-          setUser(res.data);
-        } catch {
-          localStorage.removeItem('token');
-          setToken(null);
-        }
+      try {
+        const res = await axios.get(`${API_URL}/users/me`, {
+          withCredentials: true
+        });
+        setUser(res.data);
+      } catch {
+        setUser(null);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     initAuth();
   }, []);
@@ -48,28 +46,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     formData.append('username', username);
     formData.append('password', password);
 
-    const res = await axios.post(`${API_URL}/auth/login`, formData, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    await axios.post(`${API_URL}/auth/login`, formData, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      withCredentials: true
     });
     
-    const accessToken = res.data.access_token;
-    localStorage.setItem('token', accessToken);
-    setToken(accessToken);
-    
     const userRes = await axios.get(`${API_URL}/users/me`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
+      withCredentials: true
     });
     setUser(userRes.data);
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
+  const logout = async () => {
+    try {
+      await axios.post(`${API_URL}/auth/logout`, {}, {
+        withCredentials: true
+      });
+    } catch {
+      // Ignore logout errors
+    }
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
