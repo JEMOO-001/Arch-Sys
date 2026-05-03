@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +37,11 @@ def _safe_file_path(raw_path: str) -> Path:
 
 
 async def _get_authorized_file(
-    map_id: int, db: AsyncSession, auth_token: str = None, token: str = None
+    map_id: int,
+    db: AsyncSession,
+    auth_token: str = None,
+    token: str = None,
+    request: Request = None,
 ):
     current_user = None
 
@@ -45,6 +49,11 @@ async def _get_authorized_file(
         current_user = verify_token(auth_token)
     elif token:
         current_user = verify_token(token.replace("Bearer ", ""))
+    elif request:
+        # Try cookie auth
+        cookie_token = request.cookies.get("access_token")
+        if cookie_token:
+            current_user = verify_token(cookie_token)
 
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -71,13 +80,14 @@ async def _get_authorized_file(
 @router.get("/file/{map_id}")
 async def stream_file(
     map_id: int,
+    request: Request,
     token: str = Query(None, description="Bearer token for authentication"),
     mode: str = Query("inline", description="inline=view, attachment=download"),
     db: AsyncSession = Depends(get_db),
     auth_token: str = Depends(oauth2_scheme),
 ):
     file_path = await _get_authorized_file(
-        map_id, db, auth_token=auth_token, token=token
+        map_id, db, auth_token=auth_token, token=token, request=request
     )
 
     # Size limit for downloads
@@ -193,11 +203,14 @@ async def stream_file(
 @router.get("/preview/{map_id}")
 async def preview_file(
     map_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     auth_token: str = Depends(oauth2_scheme),
 ):
     """Return inline file response for preview."""
-    file_path = await _get_authorized_file(map_id, db, auth_token=auth_token)
+    file_path = await _get_authorized_file(
+        map_id, db, auth_token=auth_token, request=request
+    )
 
     # Size limit for preview
     file_size = file_path.stat().st_size
@@ -224,6 +237,7 @@ async def preview_file(
 @router.get("/raw/{map_id}")
 async def raw_file(
     map_id: int,
+    request: Request,
     token: str = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -232,6 +246,11 @@ async def raw_file(
 
     if token:
         current_user = verify_token(token.replace("Bearer ", ""))
+    else:
+        # Try cookie auth
+        cookie_token = request.cookies.get("access_token")
+        if cookie_token:
+            current_user = verify_token(cookie_token)
 
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
