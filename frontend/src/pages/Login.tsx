@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -7,8 +7,24 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkServer = async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const res = await fetch(`${apiBase}/health`);
+        setServerOnline(res.ok);
+      } catch {
+        setServerOnline(false);
+      }
+    };
+    checkServer();
+    const interval = setInterval(checkServer, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,11 +105,22 @@ export const Login: React.FC = () => {
           marginBottom: '24px',
           padding: '13px',
           borderRadius: '10px',
-          background: 'rgba(34,211,238,0.08)',
-          border: '1px solid rgba(34,211,238,0.15)'
+          background: serverOnline === false ? 'rgba(248,113,113,0.08)' : 'rgba(34,211,238,0.08)',
+          border: `1px solid ${serverOnline === false ? 'rgba(248,113,113,0.15)' : 'rgba(34,211,238,0.15)'}`
         }}>
-          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#22d3ee', boxShadow: '0 0 12px #22d3ee' }} />
-          <span style={{ color: '#22d3ee', fontSize: '13px' }}>Server is online</span>
+          <div style={{
+            width: '10px',
+            height: '10px',
+            borderRadius: '50%',
+            background: serverOnline === false ? '#f87171' : '#22d3ee',
+            boxShadow: serverOnline === false ? '0 0 12px #f87171' : '0 0 12px #22d3ee'
+          }} />
+          <span style={{
+            color: serverOnline === false ? '#f87171' : '#22d3ee',
+            fontSize: '13px'
+          }}>
+            {serverOnline === null ? 'Checking server status...' : serverOnline ? 'Server is Online' : 'Server is Offline'}
+          </span>
         </div>
 
         <form onSubmit={handleSubmit}>

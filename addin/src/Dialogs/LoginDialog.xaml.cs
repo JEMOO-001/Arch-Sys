@@ -45,18 +45,21 @@ namespace ArcLayoutSentinel.Dialogs
                 if (reachable)
                 {
                     StatusIndicator.Fill = new SolidColorBrush(Colors.Green);
-                    StatusText.Text = "Server online";
+                    StatusText.Foreground = new SolidColorBrush(Colors.Green);
+                    StatusText.Text = "Server is Online";
                 }
                 else
                 {
                     StatusIndicator.Fill = new SolidColorBrush(Colors.Red);
-                    StatusText.Text = $"Server unreachable: {error}";
+                    StatusText.Foreground = new SolidColorBrush(Colors.Red);
+                    StatusText.Text = "Server is Offline";
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 StatusIndicator.Fill = new SolidColorBrush(Colors.Red);
-                StatusText.Text = $"Error: {ex.Message}";
+                StatusText.Foreground = new SolidColorBrush(Colors.Red);
+                StatusText.Text = "Server is Offline";
             }
         }
 
@@ -67,6 +70,7 @@ namespace ArcLayoutSentinel.Dialogs
         private async void TestConnectionButton_Click(object sender, RoutedEventArgs e)
         {
             TestConnectionButton.IsEnabled = false;
+            StatusText.Foreground = new SolidColorBrush(Colors.Orange);
             StatusText.Text = "Testing connection...";
             StatusIndicator.Fill = new SolidColorBrush(Colors.Orange);
 
@@ -76,12 +80,14 @@ namespace ArcLayoutSentinel.Dialogs
                 if (reachable)
                 {
                     StatusIndicator.Fill = new SolidColorBrush(Colors.Green);
-                    StatusText.Text = "Connection successful - server is online";
+                    StatusText.Foreground = new SolidColorBrush(Colors.Green);
+                    StatusText.Text = "Server is Online";
                 }
                 else
                 {
                     StatusIndicator.Fill = new SolidColorBrush(Colors.Red);
-                    StatusText.Text = $"Connection failed: {error}";
+                    StatusText.Foreground = new SolidColorBrush(Colors.Red);
+                    StatusText.Text = "Server is Offline";
                     MessageBox.Show($"Failed to connect to server:\n{error}\n\nPlease verify:\n" +
                         $"• API server is running at {ConfigManager.BaseUrl}\n" +
                         $"• Network connectivity is available", "Connection Test Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -90,7 +96,8 @@ namespace ArcLayoutSentinel.Dialogs
             catch (Exception ex)
             {
                 StatusIndicator.Fill = new SolidColorBrush(Colors.Red);
-                StatusText.Text = $"Error: {ex.Message}";
+                StatusText.Foreground = new SolidColorBrush(Colors.Red);
+                StatusText.Text = "Server is Offline";
                 MessageBox.Show($"Connection test error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
@@ -109,6 +116,7 @@ namespace ArcLayoutSentinel.Dialogs
 
             // Disable button to prevent double-click
             LoginButton.IsEnabled = false;
+            StatusText.Foreground = new SolidColorBrush(Colors.Orange);
             StatusText.Text = "Logging in...";
             StatusIndicator.Fill = new SolidColorBrush(Colors.Orange);
 
@@ -129,6 +137,7 @@ namespace ArcLayoutSentinel.Dialogs
                     Module1.Current.SetLoggedInState(true);
 
                     StatusIndicator.Fill = new SolidColorBrush(Colors.Green);
+                    StatusText.Foreground = new SolidColorBrush(Colors.Green);
                     StatusText.Text = "Login successful";
 
                     this.DialogResult = true;
@@ -138,6 +147,7 @@ namespace ArcLayoutSentinel.Dialogs
                 {
                     MessageBox.Show(error, "Login Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     StatusIndicator.Fill = new SolidColorBrush(Colors.Red);
+                    StatusText.Foreground = new SolidColorBrush(Colors.Red);
                     StatusText.Text = "Login failed";
                     LoginButton.IsEnabled = true;
                 }
@@ -146,6 +156,7 @@ namespace ArcLayoutSentinel.Dialogs
             {
                 MessageBox.Show($"Login error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 StatusIndicator.Fill = new SolidColorBrush(Colors.Red);
+                StatusText.Foreground = new SolidColorBrush(Colors.Red);
                 StatusText.Text = "Login error";
                 LoginButton.IsEnabled = true;
             }

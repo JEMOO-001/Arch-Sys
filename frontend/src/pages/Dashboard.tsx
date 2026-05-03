@@ -14,6 +14,16 @@ import axios from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
 
+const b64ToBlob = (b64: string, contentType: string) => {
+  const byteCharacters = atob(b64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: contentType });
+};
+
 interface Stats {
   total: number;
   notStarted: number;
@@ -156,9 +166,38 @@ const handleSearch = async () => {
     }
   };
 
-  const handleViewNewTab = (record: MapRecord) => {
-    const token = localStorage.getItem('token');
-    window.open(`${API_URL}/proxy/file/${record.map_id}?token=${token}&mode=inline`, '_blank');
+  const handleViewNewTab = async (record: MapRecord) => {
+    const tab = window.open('', '_blank');
+    if (!tab) return;
+    tab.document.write('<html><body style="font-family:sans-serif;padding:16px">Loading preview...</body></html>');
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/proxy/preview/${record.map_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      const contentType = payload.media_type || 'application/pdf';
+      const blob = b64ToBlob(payload.data_base64, contentType);
+      const url = window.URL.createObjectURL(blob);
+      const isImage = String(contentType).includes('image/');
+      tab.document.write(`
+        <html>
+          <body style="margin:0;background:#111827;display:flex;align-items:center;justify-content:center;min-height:100vh">
+            ${isImage
+              ? `<img src="${url}" style="max-width:95vw;max-height:95vh;object-fit:contain" alt="preview" />`
+              : `<iframe src="${url}" style="width:100vw;height:100vh;border:0"></iframe>`
+            }
+          </body>
+        </html>
+      `);
+      tab.document.close();
+    } catch {
+      tab.document.write('<html><body style="font-family:sans-serif;padding:16px;color:#b91c1c">Failed to load preview.</body></html>');
+      tab.document.close();
+    }
   };
 
   const handleDownload = async (record: MapRecord) => {
