@@ -28,7 +28,9 @@ def _safe_file_path(raw_path: str) -> Path:
     return resolved
 
 
-async def _get_authorized_file(map_id: int, db: AsyncSession, auth_token: str = None, token: str = None):
+async def _get_authorized_file(
+    map_id: int, db: AsyncSession, auth_token: str = None, token: str = None
+):
     current_user = None
 
     if auth_token:
@@ -46,7 +48,9 @@ async def _get_authorized_file(map_id: int, db: AsyncSession, auth_token: str = 
         raise HTTPException(status_code=404, detail="Map record not found")
 
     if not db_map.file_path:
-        raise HTTPException(status_code=404, detail="No file attached to this map record")
+        raise HTTPException(
+            status_code=404, detail="No file attached to this map record"
+        )
 
     file_path = _safe_file_path(db_map.file_path)
     if not file_path.exists():
@@ -54,6 +58,7 @@ async def _get_authorized_file(map_id: int, db: AsyncSession, auth_token: str = 
         raise HTTPException(status_code=404, detail="File not found on server")
 
     return file_path
+
 
 @router.get("/file/{map_id}")
 async def stream_file(
@@ -63,27 +68,35 @@ async def stream_file(
     db: AsyncSession = Depends(get_db),
     auth_token: str = Depends(oauth2_scheme),
 ):
-    file_path = await _get_authorized_file(map_id, db, auth_token=auth_token, token=token)
+    file_path = await _get_authorized_file(
+        map_id, db, auth_token=auth_token, token=token
+    )
 
     safe_name = escape(file_path.name)
     is_pdf = file_path.suffix.lower() == ".pdf"
     is_image = file_path.suffix.lower() in [".jpeg", ".jpg", ".png"]
     media_type = "application/pdf"
     if is_image:
-        media_type = "image/jpeg" if file_path.suffix.lower() in [".jpeg", ".jpg"] else "image/png"
+        media_type = (
+            "image/jpeg"
+            if file_path.suffix.lower() in [".jpeg", ".jpg"]
+            else "image/png"
+        )
 
-    logger.info(f"Serving file: {file_path.name}, media_type={media_type}, mode={mode}, is_image={is_image}")
+    logger.info(
+        f"Serving file: {file_path.name}, media_type={media_type}, mode={mode}, is_image={is_image}"
+    )
 
     if mode == "attachment":
-        headers = {"Content-Disposition": f"attachment; filename=\"{file_path.name}\""}
+        headers = {"Content-Disposition": f'attachment; filename="{file_path.name}"'}
         return FileResponse(
             path=file_path,
             media_type=media_type,
             filename=file_path.name,
-            headers=headers
+            headers=headers,
         )
 
-    safe_token = escape(token or '')
+    safe_token = escape(token or "")
 
     if token and is_image:
         html_content = f"""
@@ -152,7 +165,9 @@ async def stream_file(
 """
         return HTMLResponse(content=html_content)
 
-    return FileResponse(path=file_path, media_type=media_type, headers={"Content-Disposition": "inline"})
+    return FileResponse(
+        path=file_path, media_type=media_type, headers={"Content-Disposition": "inline"}
+    )
 
 
 @router.get("/preview/{map_id}")
@@ -163,6 +178,11 @@ async def preview_file(
 ):
     """Return inline file response for preview."""
     file_path = await _get_authorized_file(map_id, db, auth_token=auth_token)
+
+    # Size limit: 50MB max for preview
+    file_size = file_path.stat().st_size
+    if file_size > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large for preview")
 
     media_type = "application/pdf"
     suffix = file_path.suffix.lower()
@@ -182,29 +202,34 @@ async def raw_file(
 ):
     """Raw file stream for iframe/embedding"""
     current_user = None
-    
+
     if token:
         current_user = verify_token(token.replace("Bearer ", ""))
-    
+
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     result = await db.execute(select(Map).where(Map.map_id == map_id))
     db_map = result.scalar_one_or_none()
-    
+
     if not db_map:
         raise HTTPException(status_code=404, detail="Map not found")
-    
+
     file_path = _safe_file_path(db_map.file_path)
-    
+
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    
+
+    # Size limit: 50MB max for raw stream
+    file_size = file_path.stat().st_size
+    if file_size > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large")
+
     media_type = "application/pdf"
     if file_path.suffix.lower() in [".jpeg", ".jpg"]:
         media_type = "image/jpeg"
     elif file_path.suffix.lower() == ".png":
         media_type = "image/png"
-    
+
     headers = {"Content-Disposition": "inline"}
     return FileResponse(path=file_path, media_type=media_type, headers=headers)
