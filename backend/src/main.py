@@ -26,8 +26,8 @@ app.add_middleware(
     secret_key=settings.SECRET_KEY,
     session_cookie="sentinel_session",
     max_age=28800,  # 8 hours
-    same_site="lax",
-    https_only=False,  # Set True in production
+    same_site="strict",
+    https_only=True,
 )
 
 # 1. CORS Configuration

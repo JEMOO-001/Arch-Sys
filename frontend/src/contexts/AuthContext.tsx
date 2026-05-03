@@ -42,6 +42,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
     initAuth();
+    
+    // Refresh CSRF token every hour
+    const interval = setInterval(async () => {
+      try {
+        await initializeCsrf();
+      } catch (err) {
+        console.error('Failed to refresh CSRF token:', err);
+      }
+    }, 3600000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const login = async (username: string, password: string) => {

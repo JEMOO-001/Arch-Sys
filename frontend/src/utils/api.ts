@@ -48,14 +48,16 @@ axios.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const maxRetries = 3;
+    const retryCount = (originalRequest._retryCount || 0) + 1;
 
     if (
       error.response?.status === 403 &&
       error.response?.data?.detail?.includes('CSRF') &&
-      !originalRequest._retry
+      retryCount < maxRetries
     ) {
-      originalRequest._retry = true;
-      console.warn('CSRF token invalid, refreshing...');
+      originalRequest._retryCount = retryCount;
+      console.warn(`CSRF token invalid (attempt ${retryCount}/${maxRetries}), refreshing...`);
 
       try {
         await initializeCsrf();

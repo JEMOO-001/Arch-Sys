@@ -62,8 +62,13 @@ async def logout():
 
 
 @router.get("/csrf-token")
+@limiter.limit("10/minute")
 async def get_csrf_token(request: Request):
     """Generate a secure CSRF token and store in session."""
+    # Require authentication cookie
+    if "access_token" not in request.cookies:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     token = secrets.token_urlsafe(32)
     request.session["csrf_token"] = token
     return {"csrf_token": token}
