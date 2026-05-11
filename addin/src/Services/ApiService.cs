@@ -4,36 +4,10 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using ArcLayoutSentinel.Models;
 
 namespace ArcLayoutSentinel.Services
 {
-    public class CategoryInfo
-    {
-        public int category_id { get; set; }
-        public string name { get; set; }
-        public string prefix { get; set; }
-        public string description { get; set; }
-    }
-
-    public class MapInfo
-    {
-        public int MapId { get; set; }
-        public string UniqueId { get; set; }
-        public string LayoutName { get; set; }
-        public string ProjectPath { get; set; }
-        public string ProjectName { get; set; }
-        public string Category { get; set; }
-        public string IncomeNum { get; set; }
-        public string OutcomeNum { get; set; }
-        public string ToWhom { get; set; }
-        public string Status { get; set; }
-        public string Comment { get; set; }
-        public string FilePath { get; set; }
-        public int AnalystId { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime? UpdatedAt { get; set; }
-    }
-
     public class ApiService
     {
         private static readonly HttpClient _client = new() { Timeout = TimeSpan.FromSeconds(30) };

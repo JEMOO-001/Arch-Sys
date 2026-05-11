@@ -6,8 +6,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using ArcLayoutSentinel.Services;
+using ArcLayoutSentinel.Models;
 
-namespace ArcLayoutSentinel.Dialogs
+namespace ArcLayoutSentinel.Views
 {
     public partial class MapSelectionDialog : Window
     {

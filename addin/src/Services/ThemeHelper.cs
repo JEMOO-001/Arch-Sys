@@ -1,7 +1,7 @@
 using Microsoft.Win32;
 using System.Windows;
 
-namespace ArcLayoutSentinel.Dialogs
+namespace ArcLayoutSentinel.Services
 {
     public static class ThemeHelper
     {

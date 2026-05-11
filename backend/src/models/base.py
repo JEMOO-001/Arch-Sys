@@ -36,3 +36,5 @@ class Project(Base):
     client_name = Column(String(200), nullable=False)
     active = Column(Boolean, default=True)
     tenant_id = Column(Integer, nullable=False, index=True, default=1)
+
+

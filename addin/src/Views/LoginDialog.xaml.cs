@@ -7,7 +7,7 @@ using System.Windows;
 using System.Windows.Media;
 using ArcLayoutSentinel.Services;
 
-namespace ArcLayoutSentinel.Dialogs
+namespace ArcLayoutSentinel.Views
 {
     /// <summary>
     /// Zero-SDK Login Dialog - Standard WPF Window, no ArcGIS Pro SDK dependencies.
@@ -160,6 +160,13 @@ namespace ArcLayoutSentinel.Dialogs
                 StatusText.Text = "Login error";
                 LoginButton.IsEnabled = true;
             }
+        }
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var settingsDialog = new SettingsDialog();
+            try { settingsDialog.Owner = this; } catch { }
+            settingsDialog.ShowDialog();
         }
     }
 }

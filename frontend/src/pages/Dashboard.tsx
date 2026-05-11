@@ -167,49 +167,31 @@ const handleSearch = async () => {
   };
 
   const handleViewNewTab = async (record: MapRecord) => {
-    const fileUrl = `${API_URL}/proxy/preview/${record.map_id}`;
-    
     try {
-      // Fetch blob with cookies (required for auth)
-      const response = await fetch(fileUrl, { credentials: 'include' });
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/proxy/preview/${record.map_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      
-      const blob = await response.blob();
-      const contentType = response.headers.get('content-type') || 'application/pdf';
-      const url = window.URL.createObjectURL(blob);
+      const payload = await response.json();
+      const contentType = payload.media_type || 'application/pdf';
       const isImage = String(contentType).includes('image/');
-      const title = record.unique_id ? `Preview: ${record.unique_id}` : 'Preview';
 
       const tab = window.open('', '_blank');
       if (!tab) return;
 
+      const title = record.unique_id ? `Preview: ${record.unique_id}` : 'Preview';
+      let url: string;
       if (isImage) {
-        // Image: display centered
-        tab.document.write(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #111827; display: flex; align-items: center; justify-content: center; }
-    img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
-    .error { color: #f87171; padding: 24px; text-align: center; }
-  </style>
-</head>
-<body>
-  <img src="${url}" alt="preview" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load image</div>'" />
-  <script>
-    window.addEventListener('beforeunload', function() { URL.revokeObjectURL('${url}'); });
-  </script>
-</body>
-</html>`);
+        url = `data:${contentType};base64,${payload.data_base64}`;
       } else {
-        // PDF: use iframe so browser shows built-in PDF viewer
-        tab.document.write(`<!DOCTYPE html>
+        const blob = b64ToBlob(payload.data_base64, contentType);
+        url = window.URL.createObjectURL(blob);
+      }
+
+      tab.document.write(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -217,19 +199,28 @@ const handleSearch = async () => {
   <title>${title}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #111827; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { background: #111827; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .error { color: #f87171; padding: 24px; text-align: center; font-size: 14px; }
+    img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
     iframe { width: 100vw; height: 100vh; border: 0; }
-    .error { color: #f87171; padding: 24px; text-align: center; font-family: sans-serif; }
   </style>
 </head>
 <body>
-  <iframe src="${url}" title="PDF Preview"></iframe>
+  ${isImage
+    ? `<img src="${url}" alt="preview" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load image. The file may be corrupted or unsupported.</div>'" />`
+    : `<iframe src="${url}" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load PDF. The file may be corrupted or unsupported.</div>'"></iframe>`
+  }
   <script>
-    window.addEventListener('beforeunload', function() { URL.revokeObjectURL('${url}'); });
+    (function() {
+      var blobUrl = '${url}';
+      window.addEventListener('beforeunload', function() {
+        if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+      });
+    })();
   </script>
 </body>
 </html>`);
-      }
       tab.document.close();
     } catch (err) {
       const errTab = window.open('', '_blank');
@@ -240,7 +231,7 @@ const handleSearch = async () => {
   <meta charset="UTF-8">
   <title>Preview Error</title>
   <style>
-    body { font-family: sans-serif; padding: 24px; background: #111827; color: #f87171; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; background: #111827; color: #f87171; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
     .error-box { text-align: center; }
     .error-box h2 { margin-bottom: 8px; font-size: 18px; }
     .error-box p { font-size: 14px; opacity: 0.8; }

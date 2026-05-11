@@ -2,33 +2,12 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
+using ArcLayoutSentinel.Models;
 
 namespace ArcLayoutSentinel.Services
 {
     public static class PreFlightService
     {
-        public class PreFlightResult
-        {
-            public bool ApiReachable { get; set; }
-            public bool TokenValid { get; set; }
-            public bool UncPathWritable { get; set; }
-            public string ApiError { get; set; }
-            public string TokenError { get; set; }
-            public string UncError { get; set; }
-            public bool AllPassed => ApiReachable && TokenValid && UncPathWritable;
-
-            public string GetSummary()
-            {
-                if (AllPassed) return "All pre-flight checks passed.";
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("Pre-flight check failed:");
-                if (!ApiReachable) sb.AppendLine($"  • API Unreachable: {ApiError}");
-                if (!TokenValid) sb.AppendLine($"  • Token Invalid: {TokenError}");
-                if (!UncPathWritable) sb.AppendLine($"  • UNC Path Error: {UncError}");
-                return sb.ToString();
-            }
-        }
-
         public static async Task<PreFlightResult> RunPreFlightCheckAsync()
         {
             var result = new PreFlightResult();

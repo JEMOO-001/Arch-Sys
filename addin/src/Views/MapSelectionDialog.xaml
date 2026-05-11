@@ -1,4 +1,4 @@
-<Window x:Class="ArcLayoutSentinel.Dialogs.MapSelectionDialog"
+<Window x:Class="ArcLayoutSentinel.Views.MapSelectionDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Select Map to Edit"

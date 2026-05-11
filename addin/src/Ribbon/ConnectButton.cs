@@ -2,7 +2,7 @@ using System;
 using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
 using ArcLayoutSentinel.Services;
-using ArcLayoutSentinel.Dialogs;
+using ArcLayoutSentinel.Views;
 
 namespace ArcLayoutSentinel
 {

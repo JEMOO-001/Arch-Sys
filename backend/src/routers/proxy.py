@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,50 +6,24 @@ from sqlalchemy import select
 from pathlib import Path
 from html import escape
 import logging
+import base64
 from ..database import get_db
-from ..core.config import settings
 from ..models.maps import Map
 from ..dependencies.auth import verify_token
 
 router = APIRouter(prefix="/proxy", tags=["Proxy"])
 logger = logging.getLogger(__name__)
-ARCHIVE_ROOT = Path(settings.ARCHIVE_ROOT_PATH).resolve()
-
-# Configurable size limits
-MAX_PREVIEW_SIZE = settings.MAX_PREVIEW_SIZE_MB * 1024 * 1024
-MAX_DOWNLOAD_SIZE = settings.MAX_DOWNLOAD_SIZE_MB * 1024 * 1024
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 
-def _safe_file_path(raw_path: str) -> Path:
-    """Validate file path is within archive root. Returns 403 if traversal detected."""
-    file_path = Path(raw_path).expanduser()
-    resolved = file_path.resolve(strict=False)
-    try:
-        resolved.relative_to(ARCHIVE_ROOT)
-    except ValueError:
-        logger.warning(f"Path traversal attempt blocked: {raw_path}")
-        raise HTTPException(
-            status_code=403, detail="Access denied - file outside archive root"
-        )
-    return resolved
-
-
-async def _get_authorized_file(
-    map_id: int, db: AsyncSession, auth_token: str = None, token: str = None, request: Request = None
-):
+async def _get_authorized_file(map_id: int, db: AsyncSession, auth_token: str = None, token: str = None):
     current_user = None
 
     if auth_token:
         current_user = verify_token(auth_token)
     elif token:
         current_user = verify_token(token.replace("Bearer ", ""))
-    elif request:
-        # Try cookie auth
-        cookie_token = request.cookies.get("access_token")
-        if cookie_token:
-            current_user = verify_token(cookie_token)
 
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -61,68 +35,44 @@ async def _get_authorized_file(
         raise HTTPException(status_code=404, detail="Map record not found")
 
     if not db_map.file_path:
-        raise HTTPException(
-            status_code=404, detail="No file attached to this map record"
-        )
+        raise HTTPException(status_code=404, detail="No file attached to this map record")
 
-    file_path = _safe_file_path(db_map.file_path)
+    file_path = Path(db_map.file_path)
     if not file_path.exists():
         logger.warning(f"File not found on disk: {db_map.file_path}")
         raise HTTPException(status_code=404, detail="File not found on server")
 
     return file_path
 
-
 @router.get("/file/{map_id}")
 async def stream_file(
     map_id: int,
-    request: Request,
     token: str = Query(None, description="Bearer token for authentication"),
     mode: str = Query("inline", description="inline=view, attachment=download"),
     db: AsyncSession = Depends(get_db),
     auth_token: str = Depends(oauth2_scheme),
 ):
-    file_path = await _get_authorized_file(
-        map_id, db, auth_token=auth_token, token=token, request=request
-    )
-
-    # Size limit for downloads
-    file_size = file_path.stat().st_size
-    if file_size > MAX_DOWNLOAD_SIZE:
-        logger.warning(
-            f"Download blocked: map_id={map_id}, size={file_size} bytes, "
-            f"limit={MAX_DOWNLOAD_SIZE} bytes"
-        )
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds {settings.MAX_DOWNLOAD_SIZE_MB}MB download limit",
-        )
-
+    file_path = await _get_authorized_file(map_id, db, auth_token=auth_token, token=token)
+    
     safe_name = escape(file_path.name)
     is_pdf = file_path.suffix.lower() == ".pdf"
     is_image = file_path.suffix.lower() in [".jpeg", ".jpg", ".png"]
     media_type = "application/pdf"
     if is_image:
-        media_type = (
-            "image/jpeg"
-            if file_path.suffix.lower() in [".jpeg", ".jpg"]
-            else "image/png"
-        )
+        media_type = "image/jpeg" if file_path.suffix.lower() in [".jpeg", ".jpg"] else "image/png"
 
-    logger.info(
-        f"Serving file: {file_path.name}, media_type={media_type}, mode={mode}, is_image={is_image}"
-    )
+    logger.info(f"Serving file: {file_path.name}, media_type={media_type}, mode={mode}, is_image={is_image}")
 
     if mode == "attachment":
-        headers = {"Content-Disposition": f'attachment; filename="{file_path.name}"'}
+        headers = {"Content-Disposition": f"attachment; filename=\"{file_path.name}\""}
         return FileResponse(
             path=file_path,
             media_type=media_type,
             filename=file_path.name,
-            headers=headers,
+            headers=headers
         )
 
-    safe_token = escape(token or "")
+    safe_token = escape(token or '')
 
     if token and is_image:
         html_content = f"""
@@ -191,34 +141,17 @@ async def stream_file(
 """
         return HTMLResponse(content=html_content)
 
-    return FileResponse(
-        path=file_path, media_type=media_type, headers={"Content-Disposition": "inline"}
-    )
+    return FileResponse(path=file_path, media_type=media_type, headers={"Content-Disposition": "inline"})
 
 
 @router.get("/preview/{map_id}")
 async def preview_file(
     map_id: int,
-    request: Request,
     db: AsyncSession = Depends(get_db),
     auth_token: str = Depends(oauth2_scheme),
 ):
-    """Return inline file response for preview."""
-    file_path = await _get_authorized_file(
-        map_id, db, auth_token=auth_token, request=request
-    )
-
-    # Size limit for preview
-    file_size = file_path.stat().st_size
-    if file_size > MAX_PREVIEW_SIZE:
-        logger.warning(
-            f"Preview blocked: map_id={map_id}, size={file_size} bytes, "
-            f"limit={MAX_PREVIEW_SIZE} bytes"
-        )
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds {settings.MAX_PREVIEW_SIZE_MB}MB preview limit",
-        )
+    """Return preview payload as JSON to avoid download-manager interception."""
+    file_path = await _get_authorized_file(map_id, db, auth_token=auth_token)
 
     media_type = "application/pdf"
     suffix = file_path.suffix.lower()
@@ -227,63 +160,46 @@ async def preview_file(
     elif suffix == ".png":
         media_type = "image/png"
 
-    # Serve inline (not attachment) so browser shows PDF viewer / image viewer
-    return FileResponse(
-        path=file_path,
-        media_type=media_type,
-        headers={"Content-Disposition": "inline"}
-    )
+    file_bytes = file_path.read_bytes()
+    data_b64 = base64.b64encode(file_bytes).decode("ascii")
+    return {
+        "media_type": media_type,
+        "filename": file_path.name,
+        "data_base64": data_b64,
+    }
 
 
 @router.get("/raw/{map_id}")
 async def raw_file(
     map_id: int,
-    request: Request,
     token: str = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """Raw file stream for iframe/embedding"""
     current_user = None
-
+    
     if token:
         current_user = verify_token(token.replace("Bearer ", ""))
-    else:
-        # Try cookie auth
-        cookie_token = request.cookies.get("access_token")
-        if cookie_token:
-            current_user = verify_token(cookie_token)
-
+    
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-
+    
     result = await db.execute(select(Map).where(Map.map_id == map_id))
     db_map = result.scalar_one_or_none()
-
+    
     if not db_map:
         raise HTTPException(status_code=404, detail="Map not found")
-
-    file_path = _safe_file_path(db_map.file_path)
-
+    
+    file_path = Path(db_map.file_path)
+    
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-
-    # Size limit for raw stream
-    file_size = file_path.stat().st_size
-    if file_size > MAX_PREVIEW_SIZE:
-        logger.warning(
-            f"Raw stream blocked: map_id={map_id}, size={file_size} bytes, "
-            f"limit={MAX_PREVIEW_SIZE} bytes"
-        )
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds {settings.MAX_PREVIEW_SIZE_MB}MB size limit",
-        )
-
+    
     media_type = "application/pdf"
     if file_path.suffix.lower() in [".jpeg", ".jpg"]:
         media_type = "image/jpeg"
     elif file_path.suffix.lower() == ".png":
         media_type = "image/png"
-
+    
     headers = {"Content-Disposition": "inline"}
     return FileResponse(path=file_path, media_type=media_type, headers=headers)

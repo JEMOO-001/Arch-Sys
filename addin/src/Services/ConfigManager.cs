@@ -1,8 +1,6 @@
 using System;
 using System.IO;
 using System.Text.Json;
-using ArcLayoutSentinel.Services;
-
 namespace ArcLayoutSentinel.Services
 {
     public static class ConfigManager
@@ -20,10 +18,6 @@ namespace ArcLayoutSentinel.Services
         private static string ConfigPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "ArcLayoutSentinel", "config.json");
-
-        private static string SessionFilePath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ArcLayoutSentinel", "session.json");
 
         public static void Load()
         {

@@ -1,7 +1,8 @@
 using System.Windows;
 using System.Windows.Media;
+using ArcLayoutSentinel.Services;
 
-namespace ArcLayoutSentinel.Dialogs
+namespace ArcLayoutSentinel.Views
 {
     public partial class ArchiveSelectionDialog : Window
     {

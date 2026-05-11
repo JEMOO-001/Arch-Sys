@@ -36,7 +36,9 @@ axios.interceptors.request.use(
       if (!config.headers) {
         config.headers = {} as any;
       }
-      (config.headers as any)['x-csrf-token'] = csrfToken || '';
+      if (csrfToken) {
+        (config.headers as any)['x-csrf-token'] = csrfToken;
+      }
     }
     return config;
   },
