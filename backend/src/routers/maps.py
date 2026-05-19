@@ -9,380 +9,505 @@ from datetime import datetime, timedelta, timezone
 from ..database import get_db
 
 logger = logging.getLogger(__name__)
-from ..models.maps import Map, AuditLog
-from ..schemas.maps import MapCreate, MapResponse, MapUpdate, MapEditUpdate
+from ..models.maps import Map, AuditLog, MapComment
+from ..models.base import User
+from ..schemas.maps import MapCreate, MapResponse, MapUpdate, MapEditUpdate, MapApprovalUpdate, MapCommentCreate, MapCommentResponse
 from ..services.id_generator import generate_unique_id
 from ..dependencies.auth import get_current_user, TokenData
 from ..services.audit import log_change, log_multiple_changes
 
 router = APIRouter(prefix="/maps", tags=["Maps"])
 
+# Allowed values for search_field — prevents unexpected column probing
+_SEARCH_FIELDS = {
+    "all", "unique_id", "layout_name", "project_name", "status",
+    "to_whom", "income_num", "outcome_num", "comment",
+    "approval_status", "approval_comment",
+}
 
-def check_map_authorization(current_user: TokenData, db_map: Map):
-    """Check if user is authorized to access this map record."""
-    if current_user.role == "analyst" and db_map.analyst_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this record")
+def check_map_authorization(current_user: TokenData, db_map: Map, mode: str = "edit"):
+    """Check if user is authorized to access/modify this map record."""
+    if current_user.role == "admin":
+        return
+    
+    # SECURITY: tenant isolation
+    if db_map.tenant_id != 1: # Assuming tenant 1 for this deployment
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # NOTE: All users in the same tenant are allowed to view/edit maps as requested.
+    # Previously, non-admins were restricted to editing only their own records.
+
+
+def _apply_search(query, search: str, search_field: str):
+    """Apply search filters; reject unknown field names."""
+    if search_field not in _SEARCH_FIELDS:
+        raise HTTPException(status_code=400, detail="Invalid search_field value")
+
+    search_term = f"%{search}%"
+
+    if search_field == "all":
+        return query.where(
+            or_(
+                Map.unique_id.ilike(search_term),
+                Map.layout_name.ilike(search_term),
+                Map.project_name.ilike(search_term),
+                Map.status.ilike(search_term),
+                Map.income_num.ilike(search_term),
+                Map.outcome_num.ilike(search_term),
+                Map.to_whom.ilike(search_term),
+                Map.comment.ilike(search_term),
+                Map.approval_status.ilike(search_term),
+                Map.approval_comment.ilike(search_term),
+            )
+        )
+
+    column_map = {
+        "unique_id":        Map.unique_id,
+        "layout_name":      Map.layout_name,
+        "project_name":     Map.project_name,
+        "status":           Map.status,
+        "to_whom":          Map.to_whom,
+        "income_num":       Map.income_num,
+        "outcome_num":      Map.outcome_num,
+        "comment":          Map.comment,
+        "approval_status":  Map.approval_status,
+        "approval_comment": Map.approval_comment,
+    }
+    return query.where(column_map[search_field].ilike(search_term))
+
 
 @router.get("/next-id")
 async def get_next_id(
-    prefix: str = Query(..., min_length=2, max_length=5),
+    prefix: str = Query(..., min_length=2, max_length=5, pattern=r"^[A-Z]{2,5}$"),
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
     """Generate a unique ID for a new map. Used by the ArcGIS Pro add-in."""
     unique_id = await generate_unique_id(db, prefix)
     return {"next_id": unique_id}
 
+
 @router.post("/", response_model=MapResponse)
 async def create_map(
     map_in: MapCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
 
-    logger.info(f"create_map received: {map_in.model_dump()}")
+    logger.info("create_map received: %s", map_in.model_dump())
 
-    # 1. Use provided unique_id or generate one
-    if map_in.unique_id:
-        unique_id = map_in.unique_id
-    else:
-        unique_id = await generate_unique_id(db, map_in.category_prefix)
-    
-    # 2. Create Map record
-    tenant_id = 1
+    unique_id = map_in.unique_id or await generate_unique_id(db, map_in.category_prefix)
+
     dump = map_in.model_dump(exclude={"category_prefix", "unique_id"})
-    logger.info(f"Creating Map with fields: unique_id={unique_id}, analyst_id={current_user.user_id}, dump={dump}")
-    
+    logger.info(
+        "Creating Map: unique_id=%s analyst_id=%s dump=%s",
+        unique_id, current_user.user_id, dump,
+    )
+
     db_map = Map(
         **dump,
         unique_id=unique_id,
         analyst_id=current_user.user_id,
-        tenant_id=tenant_id,
-        created_at=datetime.now(timezone.utc) + timedelta(hours=3)
+        tenant_id=1,
+        created_at=datetime.now(timezone.utc) + timedelta(hours=3),
     )
-    
+
     db.add(db_map)
     await db.commit()
     await db.refresh(db_map)
-    
-    logger.info(f"Map created: id={db_map.map_id}, uid={db_map.unique_id}, income_num={db_map.income_num}, outcome_num={db_map.outcome_num}, to_whom={db_map.to_whom}, status={db_map.status}, comment={db_map.comment}")
-    
+
+    logger.info(
+        "Map created: id=%s uid=%s income=%s outcome=%s to_whom=%s status=%s",
+        db_map.map_id, db_map.unique_id, db_map.income_num,
+        db_map.outcome_num, db_map.to_whom, db_map.status,
+    )
     return db_map
+
 
 @router.get("/", response_model=List[MapResponse])
 async def list_maps(
-    search: Optional[str] = None,
-    search_field: Optional[str] = "all",
-    status: Optional[str] = None,
+    search: Optional[str] = Query(None, max_length=200),
+    search_field: Optional[str] = Query("all", max_length=30),
+    status: Optional[str] = Query(None, pattern=r"^(In Progress|Complete)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
-    tenant_id = 1  # TODO: Extract from request.state.tenant_id when multi-tenant is enabled
-    query = select(Map).where(Map.tenant_id == tenant_id)
-    
+    query = select(Map, User.full_name.label("analyst_name")).join(User, Map.analyst_id == User.user_id).where(Map.tenant_id == 1)
+
     if status:
         query = query.where(Map.status == status)
-    
     if search:
-        search_term = f"%{search}%"
-        
-        if search_field == 'all':
-            query = query.where(
-                or_(
-                    Map.unique_id.ilike(search_term),
-                    Map.layout_name.ilike(search_term),
-                    Map.project_name.ilike(search_term),
-                    Map.status.ilike(search_term),
-                    Map.income_num.ilike(search_term),
-                    Map.outcome_num.ilike(search_term),
-                    Map.to_whom.ilike(search_term),
-                    Map.comment.ilike(search_term)
-                )
-            )
-        elif search_field == 'unique_id':
-            query = query.where(Map.unique_id.ilike(search_term))
-        elif search_field == 'layout_name':
-            query = query.where(Map.layout_name.ilike(search_term))
-        elif search_field == 'project_name':
-            query = query.where(Map.project_name.ilike(search_term))
-        elif search_field == 'status':
-            query = query.where(Map.status.ilike(search_term))
-        elif search_field == 'to_whom':
-            query = query.where(Map.to_whom.ilike(search_term))
-        elif search_field == 'income_num':
-            query = query.where(Map.income_num.ilike(search_term))
-        elif search_field == 'outcome_num':
-            query = query.where(Map.outcome_num.ilike(search_term))
-        elif search_field == 'comment':
-            query = query.where(Map.comment.ilike(search_term))
-    
+        query = _apply_search(query, search, search_field or "all")
+
     query = query.order_by(Map.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
-    return result.scalars().all()
+    
+    maps = []
+    for db_map, analyst_name in result.all():
+        map_dict = {c.name: getattr(db_map, c.name) for c in db_map.__table__.columns}
+        map_dict["analyst_name"] = analyst_name
+        maps.append(map_dict)
+    
+    return maps
+
 
 @router.get("/my", response_model=List[MapResponse])
 async def list_my_maps(
-    search: Optional[str] = None,
-    search_field: Optional[str] = "all",
-    status_filter: Optional[str] = Query(None, alias="status"),
+    search: Optional[str] = Query(None, max_length=200),
+    search_field: Optional[str] = Query("all", max_length=30),
+    status_filter: Optional[str] = Query(None, alias="status", pattern=r"^(In Progress|Complete)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
     """List maps archived by the current user only."""
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
-    
-    tenant_id = 1
-    query = select(Map).where(Map.analyst_id == current_user.user_id, Map.tenant_id == tenant_id)
-    
+
+    query = select(Map, User.full_name.label("analyst_name")).join(User, Map.analyst_id == User.user_id).where(Map.analyst_id == current_user.user_id, Map.tenant_id == 1)
+
     if status_filter:
         query = query.where(Map.status == status_filter)
-    
     if search:
-        search_term = f"%{search}%"
-        
-        if search_field == 'all':
-            query = query.where(
-                or_(
-                    Map.unique_id.ilike(search_term),
-                    Map.layout_name.ilike(search_term),
-                    Map.project_name.ilike(search_term),
-                    Map.status.ilike(search_term),
-                    Map.income_num.ilike(search_term),
-                    Map.outcome_num.ilike(search_term),
-                    Map.to_whom.ilike(search_term),
-                    Map.comment.ilike(search_term)
-                )
-            )
-        elif search_field == 'unique_id':
-            query = query.where(Map.unique_id.ilike(search_term))
-        elif search_field == 'layout_name':
-            query = query.where(Map.layout_name.ilike(search_term))
-        elif search_field == 'project_name':
-            query = query.where(Map.project_name.ilike(search_term))
-        elif search_field == 'status':
-            query = query.where(Map.status.ilike(search_term))
-        elif search_field == 'to_whom':
-            query = query.where(Map.to_whom.ilike(search_term))
-        elif search_field == 'income_num':
-            query = query.where(Map.income_num.ilike(search_term))
-        elif search_field == 'outcome_num':
-            query = query.where(Map.outcome_num.ilike(search_term))
-        elif search_field == 'comment':
-            query = query.where(Map.comment.ilike(search_term))
-    
+        query = _apply_search(query, search, search_field or "all")
+
     query = query.order_by(Map.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
-    return result.scalars().all()
+    
+    maps = []
+    for db_map, analyst_name in result.all():
+        map_dict = {c.name: getattr(db_map, c.name) for c in db_map.__table__.columns}
+        map_dict["analyst_name"] = analyst_name
+        maps.append(map_dict)
+    
+    return maps
+
 
 @router.get("/{map_id}", response_model=MapResponse)
 async def get_map(
     map_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
-    result = await db.execute(select(Map).where(Map.map_id == map_id))
-    db_map = result.scalar_one_or_none()
-    
-    if not db_map:
+    result = await db.execute(
+        select(Map, User.full_name.label("analyst_name"))
+        .join(User, Map.analyst_id == User.user_id)
+        .where(Map.map_id == map_id)
+    )
+    row = result.first()
+
+    if not row:
         raise HTTPException(status_code=404, detail="Map record not found")
-    
-    return db_map
+
+    db_map, analyst_name = row
+    if db_map.tenant_id != 1:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    map_dict = {c.name: getattr(db_map, c.name) for c in db_map.__table__.columns}
+    map_dict["analyst_name"] = analyst_name
+    return map_dict
+
 
 @router.patch("/{map_id}", response_model=MapResponse)
 async def update_map(
     map_id: int,
     map_in: MapUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
 
     result = await db.execute(select(Map).where(Map.map_id == map_id))
     db_map = result.scalar_one_or_none()
-    
+
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
     
-    if current_user.role == "analyst" and db_map.analyst_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to edit this record")
-    
-    update_data = map_in.model_dump()  # Include all fields, even None
-    logger.debug(f"update_data = {update_data}")
-    logger.debug(f"map_in fields = {map_in}")
-    
-    # Collect changes for audit log - log ALL provided fields (even if same)
+    check_map_authorization(current_user, db_map, mode="edit")
+
+    update_data = map_in.model_dump()
     changes = {}
-    
+
     for field, new_val in update_data.items():
-        if new_val is not None:  # Only update if value is provided and not null
+        if new_val is not None:
             old_val = getattr(db_map, field)
-            # Always log if explicitly provided (even if same value)
-            changes[field] = (str(old_val) if old_val else "", str(new_val) if new_val else "")
+            changes[field] = (str(old_val) if old_val else "", str(new_val))
             setattr(db_map, field, new_val)
-            logger.debug(f"{field} set from '{old_val}' to '{new_val}'")
-    
-    # Log changes as SINGLE batch entry (only actual changes, newlines)
-    if changes and current_user.user_id:
+            logger.debug("%s set from '%s' to '%s'", field, old_val, new_val)
+
+    if changes:
         changes_list = [f"{k}: {v[0]} -> {v[1]}" for k, v in changes.items() if v[0] != v[1]]
         if changes_list:
-            combined = "\n".join(changes_list)
-            await log_change(db, map_id, current_user.user_id, "batch", combined, "")
-    
-    # Always commit if we have fields to update (regardless of audit log)
+            await log_change(db, map_id, current_user.user_id, "batch", "\n".join(changes_list), "")
+
     await db.commit()
     await db.refresh(db_map)
-    logger.info(f"Map {map_id} updated. New status: {db_map.status}")
-        
+    logger.info("Map %s updated. New status: %s", map_id, db_map.status)
     return db_map
+
 
 @router.put("/{map_id}/reexport", response_model=MapResponse)
 async def reexport_map(
     map_id: int,
     map_in: MapEditUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
     """Update map metadata and file path (for re-export/overwrite)."""
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
-    
+
     result = await db.execute(select(Map).where(Map.map_id == map_id))
     db_map = result.scalar_one_or_none()
-    
+
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
     
-    if current_user.role == "analyst" and db_map.analyst_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to edit this record")
-    
-    update_data = map_in.model_dump()  # Include all fields
-    
-    # Collect changes for audit log
+    check_map_authorization(current_user, db_map, mode="edit")
+
+    update_data = map_in.model_dump()
     changes = {}
-    
+
     for field, new_val in update_data.items():
         if new_val is not None:
             if field == "category_prefix":
                 continue
             old_val = getattr(db_map, field)
             if str(old_val) != str(new_val):
-                changes[field] = (str(old_val) if old_val else "", str(new_val) if new_val else "")
+                changes[field] = (str(old_val) if old_val else "", str(new_val))
             setattr(db_map, field, new_val)
-            logger.debug(f"{field} updated from '{old_val}' to '{new_val}'")
-    
-    # Log changes as SINGLE batch entry (only actual changes, newlines)
-    if changes and current_user.user_id:
-        changes_list = [f"{k}: {v[0]} -> {v[1]}" for k, v in changes.items() if v[0] != v[1]]
-        if changes_list:
-            combined = "\n".join(changes_list)
-            await log_change(db, map_id, current_user.user_id, "batch", combined, "")
-    
+            logger.debug("%s updated from '%s' to '%s'", field, old_val, new_val)
+
+    if changes:
+        changes_list = [f"{k}: {v[0]} -> {v[1]}" for k, v in changes.items()]
+        await log_change(db, map_id, current_user.user_id, "batch", "\n".join(changes_list), "")
+
     db_map.updated_at = datetime.now(timezone.utc) + timedelta(hours=3)
-    
+
     await db.commit()
     await db.refresh(db_map)
-    logger.info(f"Map {map_id} re-exported. status={db_map.status}")
-    
+    logger.info("Map %s re-exported. status=%s", map_id, db_map.status)
     return db_map
 
+
+@router.patch("/{map_id}/approval", response_model=MapResponse)
+async def update_map_approval(
+    map_id: int,
+    approval_in: MapApprovalUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can change approval status")
+
+    if approval_in.approval_status in {"Editing Required", "On Hold"} and not approval_in.approval_comment:
+        raise HTTPException(status_code=400, detail="Approval comment is required for this decision")
+
+    result = await db.execute(select(Map).where(Map.map_id == map_id))
+    db_map = result.scalar_one_or_none()
+    if not db_map:
+        raise HTTPException(status_code=404, detail="Map record not found")
+    if db_map.tenant_id != 1:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    old_status  = db_map.approval_status or ""
+    old_comment = db_map.approval_comment or ""
+    db_map.approval_status  = approval_in.approval_status
+    db_map.approval_comment = approval_in.approval_comment
+    db_map.approved_by  = current_user.user_id
+    db_map.approved_at  = datetime.now(timezone.utc) + timedelta(hours=3)
+    db_map.updated_at   = datetime.now(timezone.utc) + timedelta(hours=3)
+
+    # NEW LOGIC: If approved, automatically set status to Complete
+    if db_map.approval_status == "Approve":
+        db_map.status = "Complete"
+        logger.info("Map %s automatically marked as Complete due to Approval", map_id)
+    else:
+        # Revert to In Progress if status was Complete but approval is now revoked/changed
+        db_map.status = "In Progress"
+
+    await log_change(db, map_id, current_user.user_id, "approval_status", old_status, db_map.approval_status or "")
+    if old_comment != (db_map.approval_comment or ""):
+        await log_change(db, map_id, current_user.user_id, "approval_comment", old_comment, db_map.approval_comment or "")
+
+    await db.commit()
+    await db.refresh(db_map)
+    return db_map
+
+
+@router.get("/{map_id}/comments", response_model=List[MapCommentResponse])
+async def list_map_comments(
+    map_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+
+    map_result = await db.execute(select(Map).where(Map.map_id == map_id))
+    db_map = map_result.scalar_one_or_none()
+    if not db_map:
+        raise HTTPException(status_code=404, detail="Map record not found")
+    if db_map.tenant_id != 1:
+        raise HTTPException(status_code=403, detail="Access denied")
+    check_map_authorization(current_user, db_map, mode="view")
+
+    # Join with User table to get usernames
+    result = await db.execute(
+        select(MapComment, User.full_name)
+        .join(User, MapComment.user_id == User.user_id)
+        .where(MapComment.map_id == map_id, MapComment.deleted_at.is_(None))
+        .order_by(MapComment.created_at.asc())
+    )
+    
+    comments = []
+    for comment, username in result.all():
+        comment_dict = {
+            "comment_id": comment.comment_id,
+            "map_id": comment.map_id,
+            "user_id": comment.user_id,
+            "username": username,
+            "message": comment.message,
+            "created_at": comment.created_at,
+            "updated_at": comment.updated_at
+        }
+        comments.append(comment_dict)
+    
+    return comments
+
+
+@router.post("/{map_id}/comments", response_model=MapCommentResponse)
+async def create_map_comment(
+    map_id: int,
+    comment_in: MapCommentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+
+    map_result = await db.execute(select(Map).where(Map.map_id == map_id))
+    db_map = map_result.scalar_one_or_none()
+    if not db_map:
+        raise HTTPException(status_code=404, detail="Map record not found")
+    if db_map.tenant_id != 1:
+        raise HTTPException(status_code=403, detail="Access denied")
+    check_map_authorization(current_user, db_map, mode="view")
+
+    now = datetime.now(timezone.utc) + timedelta(hours=3)
+    db_comment = MapComment(
+        map_id=map_id,
+        user_id=current_user.user_id,
+        message=comment_in.message.strip(),
+        created_at=now,
+        updated_at=now,
+        tenant_id=1,
+    )
+    db.add(db_comment)
+    await db.commit()
+    await db.refresh(db_comment)
+
+    # Fetch username for response
+    user_result = await db.execute(select(User.full_name).where(User.user_id == current_user.user_id))
+    username = user_result.scalar()
+
+    await log_change(db, map_id, current_user.user_id, "comment_thread", "", "Added map comment")
+    
+    return {
+        "comment_id": db_comment.comment_id,
+        "map_id": db_comment.map_id,
+        "user_id": db_comment.user_id,
+        "username": username,
+        "message": db_comment.message,
+        "created_at": db_comment.created_at,
+        "updated_at": db_comment.updated_at
+    }
+
+
 def format_audit_action(field_name: str, old_value: str, new_value: str) -> str:
-    """Format audit action for display."""
-    # Check if it's a batch change (contains |)
     if "|" in field_name:
-        # Parse batch changes
         parts = []
         for part in field_name.split("|"):
             if ":" in part:
                 field, vals = part.split(":", 1)
                 if "→" in vals:
                     old, new = vals.split("→", 1)
-                    old_disp = old if old else "(empty)"
-                    new_disp = new if new else "(empty)"
-                    parts.append(f"{field}: {old_disp} → {new_disp}")
+                    parts.append(f"{field}: {old or '(empty)'} → {new or '(empty)'}")
         return "Updated: " + ", ".join(parts) if parts else "Multiple changes"
-    
+
     if field_name == "file_path":
         return "Re-exported map file"
-    
-    # For other fields, show "Changed field from X to Y"
-    old = old_value if old_value else "(empty)"
-    new = new_value if new_value else "(empty)"
-    
+
+    old = old_value or "(empty)"
+    new = new_value or "(empty)"
+
     if field_name == "batch":
-        # Batch changes stored in old_value
         return f"Updated:\n{old}"
-    
+
     return f"Changed {field_name}: {old} → {new}"
 
-def format_combined_action(changes: dict) -> str:
-    """Format multiple changes into one action."""
-    if len(changes) == 1:
-        field, (old, new) = list(changes.items())[0]
-        return format_audit_action(field, old, new)
-    
-    # Multiple changes - list them
-    parts = []
-    for field, (old, new) in changes.items():
-        old_disp = old if old else "(empty)"
-        new_disp = new if new else "(empty)"
-        parts.append(f"{field}: {old_disp} → {new_disp}")
-    return "Updated: " + ", ".join(parts)
 
 @router.get("/{map_id}/audit")
 async def get_audit_log(
     map_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
-    """Get audit log entries for a map."""
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
-    
-    # Verify map exists
+
     map_result = await db.execute(select(Map).where(Map.map_id == map_id))
     db_map = map_result.scalar_one_or_none()
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
-    
+    if db_map.tenant_id != 1:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     result = await db.execute(
-        select(AuditLog).where(AuditLog.map_id == map_id).order_by(AuditLog.changed_at.desc())
+        select(AuditLog, User.full_name.label("username"))
+        .join(User, AuditLog.changed_by == User.user_id)
+        .where(AuditLog.map_id == map_id)
+        .order_by(AuditLog.changed_at.desc())
     )
-    logs = result.scalars().all()
     
-    return [
-        {
+    audit_data = []
+    for log, username in result.all():
+        audit_data.append({
             "id": log.audit_id,
             "field_name": log.field_name,
             "old_value": log.old_value,
             "new_value": log.new_value,
             "action": format_audit_action(log.field_name, log.old_value, log.new_value),
-            "changed_by": log.changed_by,
-            "changed_at": log.changed_at.isoformat() if log.changed_at else None
-        }
-        for log in logs
-    ]
+            "changed_by": username,
+            "changed_at": log.changed_at.isoformat() if log.changed_at else None,
+        })
+
+    return audit_data
+
 
 @router.post("/audit/batch")
 async def check_audit_logs_batch(
     map_ids: List[int],
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
 ):
     """Check which maps have audit logs (batch). Returns list of map_ids that have changes."""
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
-    
+
+    # SECURITY: cap the input list to prevent DoS via enormous IN clauses
+    if len(map_ids) > 500:
+        raise HTTPException(status_code=400, detail="Too many map IDs (max 500)")
+
     result = await db.execute(
         select(AuditLog.map_id).where(AuditLog.map_id.in_(map_ids)).distinct()
     )
-    maps_with_audit = [row[0] for row in result.fetchall()]
-    
-    return {"maps_with_audit": maps_with_audit}
+    return {"maps_with_audit": [row[0] for row in result.fetchall()]}
