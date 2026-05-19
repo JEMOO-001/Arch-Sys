@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from .middleware.limiter import limiter
 from .middleware.tenant import tenant_middleware
-from .routers import users, maps, proxy, stats, auth, categories
+from .routers import users, maps, proxy, stats, auth, categories, ws
 from .core.config import settings
 
 # Configure logging
@@ -68,6 +68,7 @@ app.include_router(maps.router, prefix=API_PREFIX)
 app.include_router(proxy.router, prefix=API_PREFIX)
 app.include_router(stats.router, prefix=API_PREFIX)
 app.include_router(categories.router, prefix=API_PREFIX)
+app.include_router(ws.router, prefix=API_PREFIX)
 
 @app.get("/health")
 async def health_check():
