@@ -73,6 +73,66 @@ namespace ArcLayoutSentinel.Services
             }
         }
 
+        public static void SaveToProject()
+        {
+            try
+            {
+                var project = ArcGIS.Desktop.Core.Project.Current;
+                if (project != null)
+                {
+                    project.SetCustomProperty("Sentinel_BaseUrl", BaseUrl);
+                    project.SetCustomProperty("Sentinel_ArchiveRoot", ArchiveRoot);
+                    project.SetCustomProperty("Sentinel_ApiToken", ApiToken);
+                    project.SetCustomProperty("Sentinel_LastUsername", LastUsername);
+                    project.SetCustomProperty("Sentinel_SessionId", SessionId);
+                    project.SetCustomProperty("Sentinel_SessionCreatedAt", SessionCreatedAt?.ToString("o") ?? "");
+                    project.SetCustomProperty("Sentinel_SessionExpiresAt", SessionExpiresAt?.ToString("o") ?? "");
+                    System.Diagnostics.Debug.WriteLine("ConfigManager: Settings saved to project.");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ConfigManager.SaveToProject failed: {ex.Message}");
+            }
+        }
+
+        public static void LoadFromProject()
+        {
+            try
+            {
+                var project = ArcGIS.Desktop.Core.Project.Current;
+                if (project != null)
+                {
+                    var baseUrl = project.GetCustomProperty("Sentinel_BaseUrl") as string;
+                    if (!string.IsNullOrEmpty(baseUrl)) BaseUrl = baseUrl;
+
+                    var archiveRoot = project.GetCustomProperty("Sentinel_ArchiveRoot") as string;
+                    if (!string.IsNullOrEmpty(archiveRoot)) ArchiveRoot = archiveRoot;
+
+                    var apiToken = project.GetCustomProperty("Sentinel_ApiToken") as string;
+                    if (!string.IsNullOrEmpty(apiToken)) ApiToken = apiToken;
+
+                    var lastUsername = project.GetCustomProperty("Sentinel_LastUsername") as string;
+                    if (!string.IsNullOrEmpty(lastUsername)) LastUsername = lastUsername;
+
+                    var sessionId = project.GetCustomProperty("Sentinel_SessionId") as string;
+                    if (!string.IsNullOrEmpty(sessionId)) SessionId = sessionId;
+
+                    var createdAtStr = project.GetCustomProperty("Sentinel_SessionCreatedAt") as string;
+                    if (DateTime.TryParse(createdAtStr, out var createdAt)) SessionCreatedAt = createdAt;
+
+                    var expiresAtStr = project.GetCustomProperty("Sentinel_SessionExpiresAt") as string;
+                    if (DateTime.TryParse(expiresAtStr, out var expiresAt)) SessionExpiresAt = expiresAt;
+
+                    System.Diagnostics.Debug.WriteLine("ConfigManager: Settings loaded from project.");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ConfigManager.LoadFromProject failed: {ex.Message}");
+            }
+        }
+
         public static void ClearSession()
         {
             SessionId = "";
