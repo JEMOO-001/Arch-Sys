@@ -59,7 +59,20 @@ class MapComment(Base):
     map_id = Column(Integer, ForeignKey("Maps.map_id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("Users.user_id"), nullable=False, index=True)
     message = Column(Text, nullable=False)
+    attachment_path = Column(Text, nullable=True)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
     deleted_at = Column(DateTime)
+    tenant_id = Column(Integer, nullable=False, index=True, default=1)
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("Users.user_id"), nullable=False, index=True)
+    map_id = Column(Integer, ForeignKey("Maps.map_id"), nullable=False, index=True)
+    type = Column(String(50), nullable=False)
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime)
     tenant_id = Column(Integer, nullable=False, index=True, default=1)
