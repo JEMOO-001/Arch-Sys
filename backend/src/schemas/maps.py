@@ -3,58 +3,105 @@ from typing import Optional
 from datetime import datetime
 import re
 
+# Allowed status values — single source of truth
+_STATUS_PATTERN    = r"^(In Progress|Complete)$"
+_APPROVAL_PATTERN  = r"^(Approve|Editing Required|On Hold)$"
+
+# Characters that are meaningless in a file-system path but useful for injection
+_PATH_DANGEROUS_RE = re.compile(r"[<>|\"'\x00]")
+
+
+def _validate_path(v: str) -> str:
+    """
+    Block path traversal and shell-injection characters in stored paths.
+    We keep this intentionally strict:
+      - No '..' segments (traversal).
+      - No Unix absolute roots outside the expected share (starts with /).
+      - No characters that are harmless in paths but dangerous elsewhere.
+    """
+    if ".." in v:
+        raise ValueError("Path traversal sequence '..' is not allowed")
+    if v.startswith("/etc") or v.startswith("/proc") or v.startswith("/sys"):
+        raise ValueError("Absolute system paths are not allowed")
+    if _PATH_DANGEROUS_RE.search(v):
+        raise ValueError("Path contains invalid characters")
+    return v
+
+
 class MapBase(BaseModel):
-    layout_name: str = Field(..., min_length=1, max_length=200)
-    project_path: str = Field(..., min_length=1, max_length=500)
-    project_name: str = Field(..., min_length=1, max_length=50)
-    category: str = Field(..., min_length=1, max_length=100)
-    income_num: Optional[str] = Field(None, max_length=50)
-    outcome_num: Optional[str] = Field(None, max_length=50)
-    to_whom: Optional[str] = Field(None, max_length=200)
-    status: str = Field(default="Complete", pattern=r'^(Not Started|In Progress|Complete|On Hold)$')
-    comment: Optional[str] = Field(None, max_length=1000)
-    file_path: str = Field(..., min_length=1, max_length=500)
-    
-    @field_validator('file_path', 'project_path')
+    layout_name:      str           = Field(..., min_length=1, max_length=200)
+    project_path:     str           = Field(..., min_length=1, max_length=500)
+    project_name:     str           = Field(..., min_length=1, max_length=50)
+    category:         str           = Field(..., min_length=1, max_length=100)
+    income_num:       Optional[str] = Field(None, max_length=50)
+    outcome_num:      Optional[str] = Field(None, max_length=50)
+    to_whom:          Optional[str] = Field(None, max_length=200)
+    status:           str           = Field(default="In Progress", pattern=_STATUS_PATTERN)
+    comment:          Optional[str] = Field(None, max_length=1000)
+    approval_status:  Optional[str] = Field(None, pattern=_APPROVAL_PATTERN)
+    approval_comment: Optional[str] = Field(None, max_length=1000)
+    file_path:        str           = Field(..., min_length=1, max_length=500)
+
+    @field_validator("file_path", "project_path")
     @classmethod
     def validate_path(cls, v: str) -> str:
-        if '..' in v or v.startswith('/etc') or v.startswith('/proc'):
-            raise ValueError('Invalid file path')
-        return v
+        return _validate_path(v)
+
 
 class MapCreate(MapBase):
-    category_prefix: str = Field(..., min_length=2, max_length=5, pattern=r'^[A-Z]{2,5}$')
-    unique_id: Optional[str] = Field(None, pattern=r'^[A-Z]{2,5}-\d{4}$')
+    category_prefix: str           = Field(..., min_length=2, max_length=5, pattern=r"^[A-Z]{2,5}$")
+    unique_id:       Optional[str] = Field(None, pattern=r"^[A-Z]{2,5}-\d{4}$")
+
 
 class MapUpdate(BaseModel):
-    status: Optional[str] = Field(None, pattern=r'^(Not Started|In Progress|Complete|On Hold)$')
-    comment: Optional[str] = Field(None, max_length=1000)
-    income_num: Optional[str] = Field(None, max_length=50)
+    comment:     Optional[str] = Field(None, max_length=1000)
+    income_num:  Optional[str] = Field(None, max_length=50)
     outcome_num: Optional[str] = Field(None, max_length=50)
-    to_whom: Optional[str] = Field(None, max_length=200)
+    to_whom:     Optional[str] = Field(None, max_length=200)
+
 
 class MapEditUpdate(BaseModel):
-    status: Optional[str] = Field(None, pattern=r'^(Not Started|In Progress|Complete|On Hold)$')
-    comment: Optional[str] = Field(None, max_length=1000)
-    income_num: Optional[str] = Field(None, max_length=50)
-    outcome_num: Optional[str] = Field(None, max_length=50)
-    to_whom: Optional[str] = Field(None, max_length=200)
-    category: Optional[str] = Field(None, max_length=100)
+    comment:         Optional[str] = Field(None, max_length=1000)
+    income_num:      Optional[str] = Field(None, max_length=50)
+    outcome_num:     Optional[str] = Field(None, max_length=50)
+    to_whom:         Optional[str] = Field(None, max_length=200)
+    category:        Optional[str] = Field(None, max_length=100)
     category_prefix: Optional[str] = Field(None, max_length=5)
-    file_path: Optional[str] = Field(None, max_length=500)
-    
-    @field_validator('file_path')
+    file_path:       Optional[str] = Field(None, max_length=500)
+
+    @field_validator("file_path")
     @classmethod
     def validate_path(cls, v: Optional[str]) -> Optional[str]:
-        if v and ('..' in v or v.startswith('/etc') or v.startswith('/proc')):
-            raise ValueError('Invalid file path')
-        return v
+        return _validate_path(v) if v else v
+
 
 class MapResponse(MapBase):
-    map_id: int
-    unique_id: str
-    analyst_id: int
-    tenant_id: int = 1
+    map_id:       int
+    unique_id:    str
+    analyst_id:   int
+    analyst_name: Optional[str] = None
+    tenant_id:    int = 1
+    created_at:   datetime
+    updated_at:   Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MapApprovalUpdate(BaseModel):
+    approval_status:  str           = Field(..., pattern=_APPROVAL_PATTERN)
+    approval_comment: Optional[str] = Field(None, max_length=1000)
+
+
+class MapCommentCreate(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+
+
+class MapCommentResponse(BaseModel):
+    comment_id: int
+    map_id:     int
+    user_id:    int
+    username:   Optional[str] = None
+    message:    str
     created_at: datetime
     updated_at: Optional[datetime] = None
 
