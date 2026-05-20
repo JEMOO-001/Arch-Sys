@@ -22,6 +22,21 @@ namespace ArcLayoutSentinel
             {
                 Logger.Info("ArchiveButton.OnClick started");
 
+                // Check session validity first
+                if (!ConfigManager.IsSessionValid())
+                {
+                    Logger.Info("Session invalid or expired, showing LoginDialog");
+                    var loginDialog = new LoginDialog();
+                    try { loginDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+                    loginDialog.ShowDialog();
+
+                    if (loginDialog.DialogResult != true)
+                    {
+                        Logger.Info("Login cancelled, stopping archive process");
+                        return;
+                    }
+                }
+
                 var layoutInfo = await QueuedTask.Run(() =>
                 {
                     var project = Project.Current;

@@ -1,20 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from typing import List, Optional
 import logging
+import os
+import uuid
 from datetime import datetime, timedelta, timezone
+from ..core.config import settings
 
 from ..database import get_db
 
 logger = logging.getLogger(__name__)
-from ..models.maps import Map, AuditLog, MapComment
+from ..models.maps import Map, AuditLog, MapComment, Notification
 from ..models.base import User
 from ..schemas.maps import MapCreate, MapResponse, MapUpdate, MapEditUpdate, MapApprovalUpdate, MapCommentCreate, MapCommentResponse
 from ..services.id_generator import generate_unique_id
 from ..dependencies.auth import get_current_user, TokenData
 from ..services.audit import log_change, log_multiple_changes
+from ..services.websocket import manager
 
 router = APIRouter(prefix="/maps", tags=["Maps"])
 
@@ -308,9 +312,6 @@ async def update_map_approval(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admin can change approval status")
 
-    if approval_in.approval_status in {"Editing Required", "On Hold"} and not approval_in.approval_comment:
-        raise HTTPException(status_code=400, detail="Approval comment is required for this decision")
-
     result = await db.execute(select(Map).where(Map.map_id == map_id))
     db_map = result.scalar_one_or_none()
     if not db_map:
@@ -321,7 +322,7 @@ async def update_map_approval(
     old_status  = db_map.approval_status or ""
     old_comment = db_map.approval_comment or ""
     db_map.approval_status  = approval_in.approval_status
-    db_map.approval_comment = approval_in.approval_comment
+    db_map.approval_comment = approval_in.approval_comment or ""
     db_map.approved_by  = current_user.user_id
     db_map.approved_at  = datetime.now(timezone.utc) + timedelta(hours=3)
     db_map.updated_at   = datetime.now(timezone.utc) + timedelta(hours=3)
@@ -337,6 +338,34 @@ async def update_map_approval(
     await log_change(db, map_id, current_user.user_id, "approval_status", old_status, db_map.approval_status or "")
     if old_comment != (db_map.approval_comment or ""):
         await log_change(db, map_id, current_user.user_id, "approval_comment", old_comment, db_map.approval_comment or "")
+
+    # REAL-TIME: Notify Analyst of the decision
+    if db_map.analyst_id != current_user.user_id:
+        msg = f"{current_user.username} required Editing in Map {db_map.unique_id}"
+        if db_map.approval_status == "Approve":
+            msg = f"{current_user.username} Approve The Map Ready For Print {db_map.unique_id}"
+        elif db_map.approval_status == "On Hold":
+            msg = f"{current_user.username} Set Current Map {db_map.unique_id} As On Hold"
+
+        db_notif = Notification(
+            user_id=db_map.analyst_id,
+            map_id=map_id,
+            type="status_change",
+            message=msg,
+            created_at=datetime.now(timezone.utc) + timedelta(hours=3),
+            tenant_id=1
+        )
+        db.add(db_notif)
+        
+        await manager.send_personal_message({
+            "type": "NOTIFICATION",
+            "data": {
+                "id": 0,
+                "map_id": map_id,
+                "message": db_notif.message,
+                "type": "status_change"
+            }
+        }, db_map.analyst_id)
 
     await db.commit()
     await db.refresh(db_map)
@@ -376,6 +405,7 @@ async def list_map_comments(
             "user_id": comment.user_id,
             "username": username,
             "message": comment.message,
+            "attachment_path": comment.attachment_path,
             "created_at": comment.created_at,
             "updated_at": comment.updated_at
         }
@@ -387,7 +417,8 @@ async def list_map_comments(
 @router.post("/{map_id}/comments", response_model=MapCommentResponse)
 async def create_map_comment(
     map_id: int,
-    comment_in: MapCommentCreate,
+    message: str = Form(""),
+    file: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user),
 ):
@@ -402,11 +433,28 @@ async def create_map_comment(
         raise HTTPException(status_code=403, detail="Access denied")
     check_map_authorization(current_user, db_map, mode="view")
 
+    attachment_path = None
+    if file:
+        # Secure filename and save
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in [".jpg", ".jpeg", ".png", ".gif"]:
+            raise HTTPException(status_code=400, detail="Only images are allowed (.jpg, .png, .gif)")
+        
+        filename = f"{uuid.uuid4()}{ext}"
+        filepath = os.path.join(settings.UPLOAD_DIR, filename)
+        
+        with open(filepath, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        attachment_path = f"/static/uploads/{filename}"
+
     now = datetime.now(timezone.utc) + timedelta(hours=3)
     db_comment = MapComment(
         map_id=map_id,
         user_id=current_user.user_id,
-        message=comment_in.message.strip(),
+        message=message.strip(),
+        attachment_path=attachment_path,
         created_at=now,
         updated_at=now,
         tenant_id=1,
@@ -420,13 +468,64 @@ async def create_map_comment(
     username = user_result.scalar()
 
     await log_change(db, map_id, current_user.user_id, "comment_thread", "", "Added map comment")
-    
+
+    # REAL-TIME: Notify recipient
+    # If Admin commented, notify Analyst. If Analyst commented, notify Admins.
+    notif_targets = []
+    if current_user.role == "admin":
+        notif_targets = [db_map.analyst_id]
+    else:
+        # Notify all admins in tenant 1
+        admin_result = await db.execute(select(User.user_id).where(User.role == "admin", User.tenant_id == 1))
+        notif_targets = admin_result.scalars().all()
+
+    for target_id in notif_targets:
+        if target_id == current_user.user_id: continue
+
+        db_notif = Notification(
+            user_id=target_id,
+            map_id=map_id,
+            type="comment",
+            message=f"{current_user.username} Sent New message at Map {db_map.unique_id}",
+            created_at=now,
+            tenant_id=1
+        )
+        db.add(db_notif)
+
+        # Push via WebSocket
+        await manager.send_personal_message({
+            "type": "NOTIFICATION",
+            "data": {
+                "id": 0,
+                "map_id": map_id,
+                "message": db_notif.message,
+                "type": "comment"
+            }
+        }, target_id)
+
+    # Broadcast message to anyone viewing this map (WhatsApp-style live update)
+    await manager.broadcast({
+        "type": "CHAT_MESSAGE",
+        "data": {
+            "comment_id": db_comment.comment_id,
+            "map_id": db_comment.map_id,
+            "user_id": db_comment.user_id,
+            "username": username,
+            "message": db_comment.message,
+            "attachment_path": attachment_path,
+            "created_at": db_comment.created_at.isoformat()
+        }
+    })
+
+    await db.commit()
+
     return {
         "comment_id": db_comment.comment_id,
         "map_id": db_comment.map_id,
         "user_id": db_comment.user_id,
         "username": username,
         "message": db_comment.message,
+        "attachment_path": attachment_path,
         "created_at": db_comment.created_at,
         "updated_at": db_comment.updated_at
     }

@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
+using ArcGIS.Desktop.Core.Events;
 
 namespace ArcLayoutSentinel
 {
@@ -30,6 +32,40 @@ namespace ArcLayoutSentinel
 
                 CheckPcRestart();
 
+                // Subscribe to project events for persistence
+                ProjectOpenedEvent.Subscribe(args =>
+                {
+                    try
+                    {
+                        Services.Logger.Info("Project opened. Loading Sentinel settings...");
+                        Services.ConfigManager.LoadFromProject();
+
+                        if (Services.ConfigManager.IsSessionValid())
+                        {
+                            Services.Logger.Info("Session restored from project for {User}", Services.ConfigManager.LastUsername);
+                            SetLoggedInState(true);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Services.Logger.Error(ex, "ProjectOpenedEvent Handler ERROR");
+                    }
+                });
+
+                ProjectClosingEvent.Subscribe(args =>
+                {
+                    try
+                    {
+                        Services.Logger.Info("Project closing. Saving Sentinel settings...");
+                        Services.ConfigManager.SaveToProject();
+                    }
+                    catch (Exception ex)
+                    {
+                        Services.Logger.Error(ex, "ProjectClosingEvent Handler ERROR");
+                    }
+                    return Task.CompletedTask;
+                });
+
                 if (Services.ConfigManager.IsSessionValid())
                 {
                     Services.Logger.Info("Restoring valid session for {User}", Services.ConfigManager.LastUsername);
@@ -51,40 +87,6 @@ namespace ArcLayoutSentinel
             }
 
             return base.Initialize();
-        }
-
-        protected override void OnProjectOpened(ArcGIS.Desktop.Core.Events.ProjectEventArgs args)
-        {
-            try
-            {
-                Services.Logger.Info("Project opened: {ProjectName}. Loading Sentinel settings...", args.Project.Name);
-                Services.ConfigManager.LoadFromProject();
-
-                if (Services.ConfigManager.IsSessionValid())
-                {
-                    Services.Logger.Info("Session restored from project for {User}", Services.ConfigManager.LastUsername);
-                    SetLoggedInState(true);
-                }
-            }
-            catch (Exception ex)
-            {
-                Services.Logger.Error(ex, "OnProjectOpened ERROR");
-            }
-            base.OnProjectOpened(args);
-        }
-
-        protected override Task OnProjectClosingAsync(ArcGIS.Desktop.Core.Events.ProjectClosingEventArgs args)
-        {
-            try
-            {
-                Services.Logger.Info("Project closing. Saving Sentinel settings...");
-                Services.ConfigManager.SaveToProject();
-            }
-            catch (Exception ex)
-            {
-                Services.Logger.Error(ex, "OnProjectClosingAsync ERROR");
-            }
-            return base.OnProjectClosingAsync(args);
         }
 
         private void CheckPcRestart()

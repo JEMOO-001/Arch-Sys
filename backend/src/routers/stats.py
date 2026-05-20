@@ -20,17 +20,15 @@ async def get_summary_stats(
     
     stats = {
         "total": sum(r[1] for r in rows),
-        "notStarted": next((r[1] for r in rows if r[0] == "Not Started"), 0),
         "inProgress": next((r[1] for r in rows if r[0] == "In Progress"), 0),
-        "complete": next((r[1] for r in rows if r[0] == "Complete"), 0),
-        "onHold": next((r[1] for r in rows if r[0] == "On Hold"), 0)
+        "complete": next((r[1] for r in rows if r[0] == "Complete"), 0)
     }
     return stats
 
 @router.get("/analysts")
 async def get_analyst_performance(
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(require_role(["owner", "admin"]))
+    current_user: TokenData = Depends(require_role(["admin"]))
 ):
     # Complex join query for performance metrics
     query = select(
@@ -39,7 +37,7 @@ async def get_analyst_performance(
         func.count(Map.map_id).label("total_count"),
         func.sum(case((Map.status == "Complete", 1), else_=0)).label("completed_count"),
         func.max(Map.created_at).label("last_archive")
-    ).join(Map).group_by(User.user_id, User.full_name)
+    ).join(Map, User.user_id == Map.analyst_id).group_by(User.user_id, User.full_name)
     
     result = await db.execute(query)
     return result.mappings().all()

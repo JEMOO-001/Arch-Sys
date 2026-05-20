@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Sentinel Settings"
         Height="340" Width="480"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         WindowStyle="SingleBorderWindow" ResizeMode="NoResize"
         Background="{DynamicResource Sentinel.WindowBackground}">
     <Window.Resources>

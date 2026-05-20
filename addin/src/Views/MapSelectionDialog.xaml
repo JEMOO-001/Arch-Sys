@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Select Map to Edit"
         Height="480" Width="520"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         WindowStyle="SingleBorderWindow" ResizeMode="NoResize"
         Background="{DynamicResource Sentinel.WindowBackground}">
     <Window.Resources>
@@ -48,44 +48,17 @@
         </Border>
 
         <Grid Grid.Row="2" Margin="24,16">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <Grid Grid.Row="0" Margin="4,0,4,8" Background="{DynamicResource Sentinel.SurfaceBackground}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="100"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="120"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="ID" FontWeight="Bold" FontSize="11"
-                           Foreground="{DynamicResource Sentinel.TextSecondary}" Margin="12,6,0,6"/>
-                <TextBlock Grid.Column="1" Text="LAYOUT" FontWeight="Bold" FontSize="11"
-                           Foreground="{DynamicResource Sentinel.TextSecondary}" Margin="12,6,0,6"/>
-                <TextBlock Grid.Column="2" Text="DATE" FontWeight="Bold" FontSize="11"
-                           Foreground="{DynamicResource Sentinel.TextSecondary}" Margin="12,6,0,6"/>
-            </Grid>
-            <ListView Grid.Row="1" x:Name="MapListView"
+            <ListView x:Name="MapListView"
                       SelectionMode="Single" MouseDoubleClick="MapListView_MouseDoubleClick"
                       SelectionChanged="MapListView_SelectionChanged"
                       Background="Transparent" BorderThickness="0">
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <Grid Margin="12,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="100"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="120"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{Binding UniqueId}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource Sentinel.TextPrimary}"/>
-                            <TextBlock Grid.Column="1" Text="{Binding LayoutName}" FontSize="13"
-                                       Foreground="{DynamicResource Sentinel.TextPrimary}"/>
-                            <TextBlock Grid.Column="2" Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd}'}" FontSize="13"
-                                       Foreground="{DynamicResource Sentinel.TextSecondary}"/>
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="ID" Width="100" DisplayMemberBinding="{Binding UniqueId}"/>
+                        <GridViewColumn Header="LAYOUT" Width="200" DisplayMemberBinding="{Binding LayoutName}"/>
+                        <GridViewColumn Header="DATE" Width="120" DisplayMemberBinding="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd}'}"/>
+                    </GridView>
+                </ListView.View>
             </ListView>
         </Grid>
 
@@ -94,10 +67,7 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="CancelBtn" Content="← Back" Margin="0,0,12,0"

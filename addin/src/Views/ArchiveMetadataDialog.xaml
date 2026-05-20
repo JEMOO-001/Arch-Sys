@@ -6,7 +6,7 @@
         Width="540"
         WindowStartupLocation="CenterOwner"
         WindowStyle="SingleBorderWindow"
-        ResizeMode="CanResize"
+        ResizeMode="CanResize" ShowInTaskbar="False"
         MinHeight="660" MinWidth="480"
         Background="{DynamicResource Sentinel.WindowBackground}">
     <Window.Resources>

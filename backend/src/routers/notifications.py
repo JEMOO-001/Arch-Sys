@@ -66,3 +66,20 @@ async def mark_all_as_read(
     await db.execute(query)
     await db.commit()
     return {"status": "success"}
+
+@router.patch("/read-map/{map_id}")
+async def mark_map_as_read(
+    map_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Mark all notifications for a specific map as read."""
+    query = update(Notification).where(
+        Notification.user_id == current_user.user_id,
+        Notification.map_id == map_id,
+        Notification.is_read == False
+    ).values(is_read=True)
+    
+    await db.execute(query)
+    await db.commit()
+    return {"status": "success"}

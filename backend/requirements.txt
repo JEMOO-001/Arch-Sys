@@ -4,7 +4,7 @@ sqlalchemy[asyncio]
 pydantic-settings
 python-jose[cryptography]
 passlib[bcrypt]
-pyodbc
+pyodbc==5.2.0
 python-multipart
 aioodbc
 slowapi

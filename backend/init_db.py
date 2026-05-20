@@ -44,7 +44,7 @@ async def init_database():
                 username NVARCHAR(50) NOT NULL UNIQUE,
                 password_hash NVARCHAR(MAX) NOT NULL,
                 full_name NVARCHAR(100) NOT NULL,
-                role NVARCHAR(20) NOT NULL CHECK (role IN ('admin', 'owner', 'analyst', 'readonly')),
+                role NVARCHAR(20) NOT NULL CHECK (role IN ('admin', 'edit')),
                 active BIT DEFAULT 1,
                 created_at DATETIME DEFAULT GETDATE()
             )
@@ -89,8 +89,12 @@ async def init_database():
                 income_num NVARCHAR(50),
                 outcome_num NVARCHAR(50),
                 to_whom NVARCHAR(200),
-                status NVARCHAR(20) NOT NULL DEFAULT 'Not Started' CHECK (status IN ('Not Started', 'In Progress', 'Complete', 'On Hold')),
+                status NVARCHAR(20) NOT NULL DEFAULT 'In Progress' CHECK (status IN ('In Progress', 'Complete')),
                 comment NVARCHAR(MAX),
+                approval_status NVARCHAR(30),
+                approval_comment NVARCHAR(MAX),
+                approved_by INT FOREIGN KEY REFERENCES Users(user_id),
+                approved_at DATETIME,
                 file_path NVARCHAR(MAX) NOT NULL,
                 analyst_id INT NOT NULL FOREIGN KEY REFERENCES Users(user_id),
                 created_at DATETIME DEFAULT GETDATE(),
@@ -113,6 +117,20 @@ async def init_database():
             )
         """))
         print("  ✓ Audit_Log table")
+
+        await conn.execute(text("""
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Map_Comments' AND xtype='U')
+            CREATE TABLE Map_Comments (
+                comment_id INT IDENTITY(1,1) PRIMARY KEY,
+                map_id INT NOT NULL FOREIGN KEY REFERENCES Maps(map_id),
+                user_id INT NOT NULL FOREIGN KEY REFERENCES Users(user_id),
+                message NVARCHAR(MAX) NOT NULL,
+                created_at DATETIME DEFAULT GETDATE(),
+                updated_at DATETIME,
+                deleted_at DATETIME
+            )
+        """))
+        print("  ✓ Map_Comments table")
 
         # Create indexes
         await conn.execute(text("""
@@ -173,18 +191,18 @@ async def init_database():
         print(f"     Username: admin")
         print(f"     Password: {admin_password}")
 
-        # Seed test analyst user
-        analyst_password = "analyst123"
-        analyst_hash = get_password_hash(analyst_password)
+        # Seed test edit user
+        edit_password = "edit123"
+        edit_hash = get_password_hash(edit_password)
 
         await conn.execute(text(f"""
-            IF NOT EXISTS (SELECT 1 FROM Users WHERE username = 'analyst')
+            IF NOT EXISTS (SELECT 1 FROM Users WHERE username = 'edit')
             INSERT INTO Users (username, password_hash, full_name, role, active)
-            VALUES ('analyst', '{analyst_hash}', 'Test Analyst', 'analyst', 1)
+            VALUES ('edit', '{edit_hash}', 'Test Edit User', 'edit', 1)
         """))
-        print("  ✓ Analyst user created")
-        print(f"     Username: analyst")
-        print(f"     Password: {analyst_password}")
+        print("  ✓ Edit user created")
+        print(f"     Username: edit")
+        print(f"     Password: {edit_password}")
 
         # Seed a test project
         await conn.execute(text("""

@@ -12,9 +12,11 @@ interface MapRecord {
   outcome_num?: string;
   to_whom?: string;
   status: string;
+  approval_status?: string | null;
   comment?: string;
   created_at: string;
   analyst_id: number;
+  analyst_name?: string;
   file_path?: string;
 }
 
@@ -28,6 +30,8 @@ interface MapTableProps {
   hasAuditLog?: (mapId: number) => boolean;
   currentUserId: number;
   userRole: string;
+  selectedMapId: number | null;
+  onSelectMap: (record: MapRecord | null) => void;
 }
 
 export const MapTable: React.FC<MapTableProps> = ({ 
@@ -39,11 +43,13 @@ export const MapTable: React.FC<MapTableProps> = ({
   onAuditLog,
   hasAuditLog,
   currentUserId, 
-  userRole 
+  userRole,
+  selectedMapId,
+  onSelectMap
 }) => {
-  const [sortField, setSortField] = useState<'created_at' | 'unique_id' | 'layout_name' | 'status' | 'to_whom' | 'income_num'>('created_at');
+  const [sortField, setSortField] = useState<'created_at' | 'unique_id' | 'layout_name' | 'status' | 'approval_status' | 'to_whom' | 'income_num'>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  type SortField = 'created_at' | 'unique_id' | 'layout_name' | 'status' | 'to_whom' | 'income_num';
+  type SortField = 'created_at' | 'unique_id' | 'layout_name' | 'status' | 'approval_status' | 'to_whom' | 'income_num';
 
   const sortedData = useMemo(() => {
     return [...data].sort((a, b) => {
@@ -82,12 +88,24 @@ export const MapTable: React.FC<MapTableProps> = ({
     switch (status) {
       case 'Complete': return 'bg-green-100 text-green-800 border border-green-200';
       case 'In Progress': return 'bg-blue-100 text-blue-800 border border-blue-200';
-      case 'On Hold': return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
-      default: return 'bg-gray-100 text-gray-800 border border-gray-200';
+      default: return 'bg-blue-100 text-blue-800 border border-blue-200';
     }
   };
 
-  const canEdit = (analystId: number) => userRole === 'admin' || userRole === 'owner' || analystId === currentUserId;
+  const getApprovalStatusColor = (status: string) => {
+    switch (status) {
+      case 'Approve': return 'bg-green-100 text-green-800 border border-green-200';
+      case 'Editing Required': return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
+      case 'On Hold': return 'bg-red-100 text-red-800 border border-red-200';
+      case 'Pending Review':
+      default: return 'bg-blue-100 text-blue-800 border border-blue-200';
+    }
+  };
+
+  const canEdit = (analystId: number) => {
+    const role = userRole.toLowerCase().trim();
+    return role === 'admin' || analystId === currentUserId;
+  };
 
   const th = "px-3 py-2.5 border border-gray-300 text-center text-xs font-semibold bg-gray-50 text-gray-600";
   const td = "px-3 py-2.5 border border-gray-300 text-center align-middle";
@@ -99,10 +117,12 @@ export const MapTable: React.FC<MapTableProps> = ({
           <tr>
             <th className={th + " cursor-pointer hover:text-blue-600 whitespace-nowrap"} onClick={() => handleSort('unique_id')}>ID{getSortIndicator('unique_id')}</th>
             <th className={th + " cursor-pointer hover:text-blue-600"} onClick={() => handleSort('layout_name')}>Layout{getSortIndicator('layout_name')}</th>
+            <th className={th + " whitespace-nowrap"}>Analyst</th>
             <th className={th + " cursor-pointer hover:text-blue-600 whitespace-nowrap"} onClick={() => handleSort('income_num')}>رقم الوارد{getSortIndicator('income_num')}</th>
             <th className={th + " whitespace-nowrap"}>رقم الصادر</th>
             <th className={th + " cursor-pointer hover:text-blue-600 whitespace-nowrap"} onClick={() => handleSort('to_whom')}>جهه الولاية{getSortIndicator('to_whom')}</th>
             <th className={th + " cursor-pointer hover:text-blue-600 whitespace-nowrap"} onClick={() => handleSort('status')}>حالة الدراسة{getSortIndicator('status')}</th>
+            <th className={th + " cursor-pointer hover:text-blue-600 whitespace-nowrap"} onClick={() => handleSort('approval_status')}>Approval Status{getSortIndicator('approval_status')}</th>
             <th className={th + " min-w-[120px]"}>ملاحظات</th>
             <th className={th + " cursor-pointer hover:text-blue-600 whitespace-nowrap"} onClick={() => handleSort('created_at')}>التاريخ{getSortIndicator('created_at')}</th>
             <th className={th + " whitespace-nowrap"}>Actions</th>
@@ -110,12 +130,27 @@ export const MapTable: React.FC<MapTableProps> = ({
         </thead>
         <tbody>
           {sortedData.map((row) => (
-            <tr key={row.map_id} className="hover:bg-gray-50 transition-colors">
+            <tr 
+              key={row.map_id} 
+              className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedMapId === row.map_id ? 'bg-blue-50' : ''}`}
+              onClick={() => onSelectMap(selectedMapId === row.map_id ? null : row)}
+            >
               <td className={td + " whitespace-nowrap"}>
-                <span className="font-mono font-medium text-blue-600">{row.unique_id}</span>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="font-mono font-medium text-blue-600">{row.unique_id}</span>
+                  {(row.approval_status === 'Editing Required' || row.approval_status === 'On Hold') && (
+                    <span className="relative flex h-2 w-2">
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${row.approval_status === 'Editing Required' ? 'bg-yellow-400' : 'bg-red-400'}`}></span>
+                      <span className={`relative inline-flex rounded-full h-2 w-2 ${row.approval_status === 'Editing Required' ? 'bg-yellow-500' : 'bg-red-500'}`}></span>
+                    </span>
+                  )}
+                </div>
               </td>
               <td className={td + " max-w-[200px]"}>
                 <div className="text-center whitespace-nowrap overflow-hidden text-ellipsis" title={row.layout_name}>{row.layout_name}</div>
+              </td>
+              <td className={td + " text-gray-700 whitespace-nowrap font-medium"}>
+                {row.analyst_name || `User #${row.analyst_id}`}
               </td>
               <td className={td + " text-gray-700 whitespace-nowrap"}>
                 {row.income_num || '—'}
@@ -130,6 +165,13 @@ export const MapTable: React.FC<MapTableProps> = ({
                 <div className="flex justify-center">
                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusColor(row.status)}`}>
                     {row.status}
+                  </span>
+                </div>
+              </td>
+              <td className={td + " whitespace-nowrap"}>
+                <div className="flex justify-center">
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getApprovalStatusColor(row.approval_status || 'Pending Review')}`}>
+                    {row.approval_status || "Pending Review"}
                   </span>
                 </div>
               </td>

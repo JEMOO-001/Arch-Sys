@@ -28,7 +28,7 @@ CREATE TABLE Users (
     username NVARCHAR(50) NOT NULL UNIQUE,
     password_hash NVARCHAR(MAX) NOT NULL,
     full_name NVARCHAR(100) NOT NULL,
-    role NVARCHAR(20) NOT NULL CHECK (role IN ('admin', 'owner', 'analyst', 'readonly')),
+    role NVARCHAR(20) NOT NULL CHECK (role IN ('admin', 'edit')),
     active BIT DEFAULT 1,
     created_at DATETIME DEFAULT GETDATE()
 );
@@ -46,8 +46,12 @@ CREATE TABLE Maps (
     income_num NVARCHAR(50),
     outcome_num NVARCHAR(50),
     to_whom NVARCHAR(200),
-    status NVARCHAR(20) NOT NULL DEFAULT 'Not Started' CHECK (status IN ('Not Started', 'In Progress', 'Complete', 'On Hold')),
+    status NVARCHAR(20) NOT NULL DEFAULT 'In Progress' CHECK (status IN ('In Progress', 'Complete')),
     comment NVARCHAR(MAX),
+    approval_status NVARCHAR(30),
+    approval_comment NVARCHAR(MAX),
+    approved_by INT FOREIGN KEY REFERENCES Users(user_id),
+    approved_at DATETIME,
     file_path NVARCHAR(MAX) NOT NULL, -- UNC Path
     analyst_id INT NOT NULL FOREIGN KEY REFERENCES Users(user_id),
     created_at DATETIME DEFAULT GETDATE(),
@@ -67,17 +71,30 @@ CREATE TABLE Audit_Log (
 );
 GO
 
--- 6. Sequence for Unique ID generation per Category
+-- 6. Map_Comments Table
+CREATE TABLE Map_Comments (
+    comment_id INT IDENTITY(1,1) PRIMARY KEY,
+    map_id INT NOT NULL FOREIGN KEY REFERENCES Maps(map_id),
+    user_id INT NOT NULL FOREIGN KEY REFERENCES Users(user_id),
+    message NVARCHAR(MAX) NOT NULL,
+    created_at DATETIME DEFAULT GETDATE(),
+    updated_at DATETIME,
+    deleted_at DATETIME
+);
+GO
+
+-- 7. Sequence for Unique ID generation per Category
 -- Note: Simplified global sequence for v1.0
 CREATE SEQUENCE LayoutIDSequence
     START WITH 1
     INCREMENT BY 1;
 GO
 
--- 7. Indexes for Performance
+-- 8. Indexes for Performance
 CREATE INDEX IX_Maps_UniqueID ON Maps(unique_id);
 CREATE INDEX IX_Maps_ProjectCode ON Maps(project_code);
 CREATE INDEX IX_Maps_AnalystID ON Maps(analyst_id);
 CREATE INDEX IX_Maps_Status ON Maps(status);
 CREATE INDEX IX_Audit_MapID ON Audit_Log(map_id);
+CREATE INDEX IX_MapComments_MapID ON Map_Comments(map_id);
 GO

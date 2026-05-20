@@ -11,7 +11,7 @@ $finalPath = Join-Path $ProAddInFolder $AddInName
 $filesToPackage = @(
     (Join-Path $TargetDir "ArcLayoutSentinel.dll"),
     (Join-Path $TargetDir "ArcLayoutSentinel.deps.json"),
-    (Join-Path $ProjectDir "src\Config.daml")
+    (Join-Path $ProjectDir "Config.daml")
 )
 
 $optionalRuntimeFiles = @(

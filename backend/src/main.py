@@ -2,7 +2,9 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
+import os
 from .middleware.limiter import limiter
 from .middleware.tenant import tenant_middleware
 from .routers import users, maps, proxy, stats, auth, categories, ws, notifications
@@ -18,6 +20,10 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Sentinel API", version="1.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(429, _rate_limit_exceeded_handler)
+
+# Create upload directory if it doesn't exist
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 1. CORS Configuration
 origins = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",")]

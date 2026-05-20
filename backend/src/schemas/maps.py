@@ -102,6 +102,7 @@ class MapCommentResponse(BaseModel):
     user_id:    int
     username:   Optional[str] = None
     message:    str
+    attachment_path: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

@@ -163,12 +163,5 @@ namespace ArcLayoutSentinel.Views
                 LoginButton.IsEnabled = true;
             }
         }
-
-        private void SettingsButton_Click(object sender, RoutedEventArgs e)
-        {
-            var settingsDialog = new SettingsDialog();
-            try { settingsDialog.Owner = this; } catch { }
-            settingsDialog.ShowDialog();
-        }
     }
 }

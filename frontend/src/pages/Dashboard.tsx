@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Database, LogOut, LayoutGrid, BarChart3, Clock } from 'lucide-react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { MapTable } from '../components/MapTable';
 import { SummaryCards } from '../components/SummaryCards';
 import { AnalystStats } from '../components/AnalystStats';
+import { NotificationBell } from '../components/NotificationBell';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { EditModal } from '../components/EditModal';
 import { AuditLogModal } from '../components/AuditLogModal';
 import { MapDetailModal } from '../components/MapDetailModal';
+import { ReviewMode } from '../components/ReviewMode';
 import { useAuth } from '../contexts/AuthContext';
+import { useWebSocket } from '../contexts/WebSocketContext';
 import axios from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
@@ -26,10 +30,8 @@ const b64ToBlob = (b64: string, contentType: string) => {
 
 interface Stats {
   total: number;
-  notStarted: number;
   inProgress: number;
   complete: number;
-  onHold: number;
 }
 
 interface Analyst {
@@ -48,6 +50,8 @@ interface MapRecord {
   project_name: string;
   category?: string;
   status: string;
+  approval_status?: string | null;
+  approval_comment?: string | null;
   created_at: string;
   analyst_id: number;
   file_path?: string;
@@ -57,12 +61,25 @@ interface MapRecord {
   to_whom?: string;
 }
 
+interface MapComment {
+  comment_id: number;
+  map_id: number;
+  user_id: number;
+  username?: string;
+  message: string;
+  attachment_path?: string | null;
+  created_at: string;
+}
+
 export const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { mapId } = useParams();
+  const location = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [currentView, setCurrentView] = useState<'monitor' | 'summary'>('monitor');
-  const [stats, setStats] = useState<Stats>({ total: 0, notStarted: 0, inProgress: 0, complete: 0, onHold: 0 });
+  const [currentView, setCurrentView] = useState<'monitor' | 'summary' | 'review'>('monitor');
+  const [stats, setStats] = useState<Stats>({ total: 0, inProgress: 0, complete: 0 });
   const [analysts, setAnalysts] = useState<Analyst[]>([]);
   const [maps, setMaps] = useState<MapRecord[]>([]);
   const [search, setSearch] = useState('');
@@ -80,9 +97,31 @@ export const Dashboard: React.FC = () => {
   const [auditRecord, setAuditRecord] = useState<MapRecord | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<MapRecord | null>(null);
+  const [selectedMap, setSelectedMap] = useState<MapRecord | null>(null);
+  const [detailComments, setDetailComments] = useState<MapComment[]>([]);
+  const [loadingDetailComments, setLoadingDetailComments] = useState(false);
 
   const token = localStorage.getItem('token');
-  const isAdmin = user?.role === 'admin' || user?.role === 'owner';
+  const isAdmin = user?.role === 'admin';
+
+  // Hook must be called at the top level of the component
+  const { lastMessage } = useWebSocket();
+
+  useEffect(() => {
+    if (lastMessage && lastMessage.type === 'CHAT_MESSAGE') {
+      const msg = lastMessage.data;
+      const isViewingMap = (detailRecord && msg.map_id === detailRecord.map_id) || 
+                          (selectedMap && msg.map_id === selectedMap.map_id);
+      
+      if (isViewingMap) {
+        setDetailComments(prev => {
+          // Prevent duplicates
+          if (prev.find(c => c.comment_id === msg.comment_id)) return prev;
+          return [...prev, msg];
+        });
+      }
+    }
+  }, [lastMessage, detailRecord, selectedMap]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -102,6 +141,26 @@ export const Dashboard: React.FC = () => {
         setStats(statsRes.data);
         setMaps(mapsRes.data);
         
+        // Handle direct deep links / refreshes / route changes
+        if (mapId) {
+          const mId = parseInt(mapId);
+          const targetMap = mapsRes.data.find((m: MapRecord) => m.map_id === mId);
+          if (targetMap) {
+            setSelectedMap(targetMap);
+            loadMapComments(mId);
+            setCurrentView('review');
+          } else {
+            // Map not found or no access, go back to monitor
+            navigate('/', { replace: true });
+            setCurrentView('monitor');
+            setSelectedMap(null);
+          }
+        } else {
+          // No mapId provided, ensure we are in monitor view
+          setCurrentView('monitor');
+          setSelectedMap(null);
+        }
+
         const mapIds = mapsRes.data.map((m: MapRecord) => m.map_id);
         if (mapIds.length > 0) {
           try {
@@ -124,7 +183,7 @@ export const Dashboard: React.FC = () => {
       }
     };
     fetchData();
-  }, [token, isAdmin]);
+  }, [token, isAdmin, mapId, location.pathname]);
   
   useEffect(() => {
     if (!token) return;
@@ -295,6 +354,53 @@ const handleSearch = async () => {
     setDetailRecord(record);
     setDetailOpen(true);
   };
+
+  const loadMapComments = async (mapId: number, showLoader = true) => {
+    try {
+      if (showLoader) setLoadingDetailComments(true);
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/maps/${mapId}/comments`, { headers });
+      setDetailComments(res.data || []);
+    } catch (err) {
+      console.error('Failed to load comments:', err);
+      setDetailComments([]);
+    } finally {
+      if (showLoader) setLoadingDetailComments(false);
+    }
+  };
+
+  const postMapComment = async (mapId: number, message: string, file?: File) => {
+    try {
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      };
+      const formData = new FormData();
+      formData.append('message', message);
+      if (file) formData.append('file', file);
+
+      await axios.post(`${API_URL}/maps/${mapId}/comments`, formData, { headers });
+      // Refresh comments in background to avoid resetting scroll
+      await loadMapComments(mapId, false);
+    } catch (err) {
+      console.error('Failed to post comment:', err);
+      alert('Failed to send message. Please try again.');
+    }
+  };
+  const updateApproval = async (mapId: number, approvalStatus: string, approvalComment: string) => {
+    const headers = { Authorization: `Bearer ${token}` };
+    await axios.patch(`${API_URL}/maps/${mapId}/approval`, {
+      approval_status: approvalStatus,
+      approval_comment: approvalComment || null,
+    }, { headers });
+
+    const mapsRes = await axios.get(`${API_URL}/maps/`, { headers });
+    setMaps(mapsRes.data);
+    if (detailRecord) {
+      const updated = mapsRes.data.find((m: MapRecord) => m.map_id === detailRecord.map_id) || null;
+      setDetailRecord(updated);
+    }
+  };
   
   const handleRecordChange = (updated: MapRecord | null) => {
     console.log('Record changed:', updated);
@@ -339,6 +445,16 @@ const handleSearch = async () => {
 
   const refreshData = () => {
     handleSearch();
+  };
+
+  const navigateToMap = (mapId: number) => {
+    const targetMap = maps.find(m => m.map_id === mapId);
+    if (targetMap) {
+      setSelectedMap(targetMap);
+      loadMapComments(mapId);
+      navigate(`/approval/${mapId}`);
+      setCurrentView('review');
+    }
   };
 
   if (isLoading) {
@@ -402,6 +518,10 @@ const handleSearch = async () => {
               <p className="mt-1 text-gray-500 text-sm md:text-base">Welcome back, {user?.username}</p>
             </div>
             <div className="flex items-center gap-4">
+              <NotificationBell 
+                onNavigate={navigateToMap} 
+                currentlyViewingMapId={selectedMap?.map_id || detailRecord?.map_id || null}
+              />
               <div className="hidden md:flex items-center gap-2 text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
                 <Clock className="h-4 w-4" />
                 <span className="text-sm font-medium font-mono">
@@ -423,7 +543,28 @@ const handleSearch = async () => {
               /* Monitor View - Map Table */
               <div className="space-y-6">
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <h2 className="text-xl font-semibold text-gray-900">All Maps</h2>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-xl font-semibold text-gray-900">All Maps</h2>
+                    {selectedMap && (isAdmin || selectedMap.analyst_id === user?.user_id || selectedMap.approval_status === 'Editing Required') && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                      >
+                        <Button
+                          onClick={() => {
+                            loadMapComments(selectedMap.map_id);
+                            navigate(`/approval/${selectedMap.map_id}`);
+                            setCurrentView('review');
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg flex items-center gap-2 animate-pulse"
+                        >
+
+                          <Database className="h-4 w-4" />
+                          {isAdmin ? `Decision Making for ${selectedMap.unique_id}` : `View Feedback for ${selectedMap.unique_id}`}
+                        </Button>
+                      </motion.div>
+                    )}
+                  </div>
                   <div className="flex gap-2 md:gap-4 w-full md:w-auto">
                       <select
                         className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -438,6 +579,7 @@ const handleSearch = async () => {
                         <option value="to_whom">جهه الولاية</option>
                         <option value="status">حالة الدراسة</option>
                         <option value="comment">ملاحظات</option>
+                        <option value="approval_status">Approval Status</option>
                       </select>
                       <Input 
                         placeholder="Search..." 
@@ -454,16 +596,18 @@ const handleSearch = async () => {
                 <MapTable 
                   data={maps} 
                   currentUserId={user?.user_id || 0} 
-                  userRole={user?.role || 'analyst'} 
+                  userRole={user?.role || 'edit'} 
                   onViewNewTab={handleViewNewTab}
                   onEdit={handleEdit}
                   onDownload={handleDownload}
                   onDetail={handleDetail}
                   onAuditLog={handleViewAuditLog}
                   hasAuditLog={(mapId) => auditMapIds.has(mapId)}
+                  selectedMapId={selectedMap?.map_id || null}
+                  onSelectMap={setSelectedMap}
                 />
               </div>
-            ) : (
+            ) : currentView === 'summary' ? (
               /* Summary View - Full Analyst Stats */
               <div className="space-y-6">
                 <h2 className="text-xl font-semibold text-gray-900">All Users Performance</h2>
@@ -473,6 +617,23 @@ const handleSearch = async () => {
                   <p className="text-gray-500">No user data available.</p>
                 )}
               </div>
+            ) : (
+              /* Review Mode */
+              selectedMap && (
+                <ReviewMode 
+                  record={selectedMap}
+                  onBack={() => {
+                    navigate('/');
+                    setCurrentView('monitor');
+                  }}
+                  currentUserId={user?.user_id || 0}
+                  userRole={user?.role || 'edit'}
+                  comments={detailComments}
+                  loadingComments={loadingDetailComments}
+                  onPostComment={postMapComment}
+                  onUpdateApproval={updateApproval}
+                />
+              )
             )}
           </div>
         </div>
@@ -511,7 +672,12 @@ const handleSearch = async () => {
         onAuditLog={handleViewAuditLog}
         hasAuditLog={(mapId) => auditMapIds.has(mapId)}
         currentUserId={user?.user_id || 0}
-        userRole={user?.role || 'analyst'}
+        userRole={user?.role || 'edit'}
+        comments={detailComments}
+        loadingComments={loadingDetailComments}
+        onLoadComments={loadMapComments}
+        onPostComment={postMapComment}
+        onUpdateApproval={updateApproval}
       />
     </div>
   );
