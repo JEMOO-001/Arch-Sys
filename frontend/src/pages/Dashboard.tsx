@@ -16,7 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import axios from 'axios';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://172.20.1.24:8000') + '/api/v1';
 
 const b64ToBlob = (b64: string, contentType: string) => {
   const byteCharacters = atob(b64);

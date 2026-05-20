@@ -271,7 +271,7 @@ export const DecisionDrawer: React.FC<DecisionDrawerProps> = ({
                                 {c.attachment_path && (
                                   <div className="mt-2 rounded-lg overflow-hidden border border-white/20">
                                     <img 
-                                      src={(import.meta.env.VITE_API_URL || 'http://localhost:8000') + c.attachment_path} 
+                                      src={(import.meta.env.VITE_API_URL || 'http://172.20.1.24:8000') + c.attachment_path} 
                                       alt="attachment" 
                                       className="w-full h-auto cursor-pointer hover:opacity-90"
                                       onClick={() => window.open((import.meta.env.VITE_API_URL || 'http://localhost:8000') + c.attachment_path, '_blank')}

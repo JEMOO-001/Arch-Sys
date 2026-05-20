@@ -25,7 +25,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     // Using the same URL logic as API_URL but for ws://
     // Default to localhost for now as per current setup
-    const wsUrl = `ws://localhost:8000/api/v1/ws/${token}`;
+    const wsUrl = `ws://172.20.1.24:8000/api/v1/ws/${token}`;
     
     let reconnectTimeout: NodeJS.Timeout;
 

@@ -318,7 +318,7 @@ export const ReviewMode: React.FC<ReviewModeProps> = ({
                             {c.attachment_path && (
                               <div className="mt-2 rounded-lg overflow-hidden border border-gray-100 max-w-sm">
                                 <img 
-                                  src={(import.meta.env.VITE_API_URL || 'http://localhost:8000') + c.attachment_path} 
+                                  src={(import.meta.env.VITE_API_URL || 'http://172.20.1.24:8000') + c.attachment_path} 
                                   alt="attachment" 
                                   className="w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
                                   onClick={() => window.open((import.meta.env.VITE_API_URL || 'http://localhost:8000') + c.attachment_path, '_blank')}

@@ -14,7 +14,7 @@ export const Login: React.FC = () => {
   useEffect(() => {
     const checkServer = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const apiBase = import.meta.env.VITE_API_URL || 'http://172.20.1.24:8000';
         const res = await fetch(`${apiBase}/health`);
         setServerOnline(res.ok);
       } catch {
