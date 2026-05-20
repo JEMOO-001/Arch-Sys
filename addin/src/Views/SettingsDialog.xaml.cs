@@ -16,7 +16,6 @@ namespace ArcLayoutSentinel.Views
 
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
-            ConfigManager.BaseUrl = BaseUrlTextBox.Text.Trim();
             ConfigManager.ArchiveRoot = ArchiveRootTextBox.Text.Trim();
             ConfigManager.Save();
             StatusText.Text = "Settings saved successfully!";

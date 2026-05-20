@@ -31,9 +31,9 @@
 
         <StackPanel Grid.Row="1" Margin="24,24">
             <StackPanel Margin="0,0,0,20">
-                <TextBlock Text="API Server URL" Style="{DynamicResource FormLabelStyle}"/>
-                <TextBox x:Name="BaseUrlTextBox" Style="{DynamicResource FormTextBoxStyle}"/>
-                <TextBlock Text="e.g. http://172.20.1.24:8000/api/v1" FontSize="12" Foreground="{DynamicResource Sentinel.TextMuted}" Margin="0,6,0,0"/>
+                <TextBlock Text="API Server URL (Fixed)" Style="{DynamicResource FormLabelStyle}"/>
+                <TextBox x:Name="BaseUrlTextBox" Style="{DynamicResource FormTextBoxStyle}" IsReadOnly="True" Background="#F5F5F5" Foreground="#888888"/>
+                <TextBlock Text="This address is hardcoded for the local network." FontSize="11" Foreground="{DynamicResource Sentinel.TextMuted}" Margin="0,4,0,0"/>
             </StackPanel>
             <StackPanel Margin="0,0,0,20">
                 <TextBlock Text="Archive Root Path (UNC)" Style="{DynamicResource FormLabelStyle}"/>
