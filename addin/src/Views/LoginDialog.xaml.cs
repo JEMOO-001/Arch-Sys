@@ -22,6 +22,7 @@ namespace ArcLayoutSentinel.Views
         {
             InitializeComponent();
             ConfigManager.Load();
+            ThemeHelper.ApplyTheme(this);
 
             // Pre-fill username if saved
             if (!string.IsNullOrEmpty(ConfigManager.LastUsername))
@@ -133,6 +134,7 @@ namespace ArcLayoutSentinel.Views
                     ConfigManager.SessionExpiresAt = DateTime.UtcNow.AddHours(24);
                     ConfigManager.MachineId = ConfigManager.GetMachineId();
                     ConfigManager.Save();
+                    ConfigManager.SaveToProject();
 
                     Module1.Current.SetLoggedInState(true);
 

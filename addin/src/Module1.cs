@@ -53,6 +53,40 @@ namespace ArcLayoutSentinel
             return base.Initialize();
         }
 
+        protected override void OnProjectOpened(ArcGIS.Desktop.Core.Events.ProjectEventArgs args)
+        {
+            try
+            {
+                Services.Logger.Info("Project opened: {ProjectName}. Loading Sentinel settings...", args.Project.Name);
+                Services.ConfigManager.LoadFromProject();
+
+                if (Services.ConfigManager.IsSessionValid())
+                {
+                    Services.Logger.Info("Session restored from project for {User}", Services.ConfigManager.LastUsername);
+                    SetLoggedInState(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Services.Logger.Error(ex, "OnProjectOpened ERROR");
+            }
+            base.OnProjectOpened(args);
+        }
+
+        protected override Task OnProjectClosingAsync(ArcGIS.Desktop.Core.Events.ProjectClosingEventArgs args)
+        {
+            try
+            {
+                Services.Logger.Info("Project closing. Saving Sentinel settings...");
+                Services.ConfigManager.SaveToProject();
+            }
+            catch (Exception ex)
+            {
+                Services.Logger.Error(ex, "OnProjectClosingAsync ERROR");
+            }
+            return base.OnProjectClosingAsync(args);
+        }
+
         private void CheckPcRestart()
         {
             try

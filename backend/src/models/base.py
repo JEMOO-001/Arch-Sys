@@ -16,8 +16,19 @@ class User(Base):
     tenant_id = Column(Integer, nullable=False, index=True, default=1)
     created_at = Column(DateTime)
 
-    # Relationships
-    maps = relationship("Map", back_populates="analyst")
+    # Relationships — primaryjoin must be explicit because Maps has TWO FKs to Users
+    maps = relationship(
+        "Map",
+        primaryjoin="User.user_id == Map.analyst_id",
+        foreign_keys="[Map.analyst_id]",
+        back_populates="analyst",
+    )
+    approved_maps = relationship(
+        "Map",
+        primaryjoin="User.user_id == Map.approved_by",
+        foreign_keys="[Map.approved_by]",
+        back_populates="approver",
+    )
 
 class Category(Base):
     __tablename__ = "Categories"
@@ -36,5 +47,3 @@ class Project(Base):
     client_name = Column(String(200), nullable=False)
     active = Column(Boolean, default=True)
     tenant_id = Column(Integer, nullable=False, index=True, default=1)
-
-

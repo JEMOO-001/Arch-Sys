@@ -45,10 +45,10 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
 
   // Watch for formData changes and update parent
   useEffect(() => {
-    if (record && formData.status && formData.status !== record.status) {
+    if (record && formData.to_whom !== record.to_whom) {
       const updatedRecord = {
         ...record,
-        status: formData.status,
+        status: record.status,
         comment: formData.comment || '',
         income_num: formData.income_num || '',
         outcome_num: formData.outcome_num || '',
@@ -56,7 +56,7 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
       };
       onRecordChange(updatedRecord);
     }
-  }, [formData.status, formData.to_whom]);
+  }, [formData.to_whom]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +67,7 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
     // Build the updated record with current form data
     const updatedRecord: MapRecord = {
       ...record,
-      status: formData.status || record.status,
+      status: record.status,
       comment: formData.comment || '',
       income_num: formData.income_num || '',
       outcome_num: formData.outcome_num || '',
@@ -102,16 +102,9 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
 
         <div>
           <label className="text-sm font-medium text-gray-700">حالة الدراسة</label>
-          <select
-            className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={formData.status || 'In Progress'}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-          >
-            <option value="Not Started">Not Started</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Complete">Complete</option>
-            <option value="On Hold">On Hold</option>
-          </select>
+          <div className="mt-1 px-3 py-2 text-sm font-semibold bg-gray-50 rounded-md border border-gray-200 text-gray-600">
+            {formData.status}
+          </div>
         </div>
 
         <div>
@@ -124,7 +117,7 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
               if (record) {
                 const updatedRecord = {
                   ...record,
-                  status: formData.status || record.status,
+                  status: record.status,
                   comment: formData.comment || '',
                   income_num: formData.income_num || '',
                   outcome_num: formData.outcome_num || '',
