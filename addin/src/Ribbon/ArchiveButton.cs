@@ -22,6 +22,21 @@ namespace ArcLayoutSentinel
             {
                 Logger.Info("ArchiveButton.OnClick started");
 
+                // Check session validity first
+                if (!ConfigManager.IsSessionValid())
+                {
+                    Logger.Info("Session invalid or expired, showing LoginDialog");
+                    var loginDialog = new LoginDialog();
+                    try { loginDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+                    loginDialog.ShowDialog();
+
+                    if (loginDialog.DialogResult != true)
+                    {
+                        Logger.Info("Login cancelled, stopping archive process");
+                        return;
+                    }
+                }
+
                 var layoutInfo = await QueuedTask.Run(() =>
                 {
                     var project = Project.Current;
@@ -48,20 +63,9 @@ namespace ArcLayoutSentinel
                     ? ""
                     : System.IO.Path.GetFileNameWithoutExtension(layoutInfo.ProjectUri);
 
-                var selectionDialog = new ArchiveSelectionDialog();
-                try { selectionDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
-                selectionDialog.ShowDialog();
-
-                if (selectionDialog.Result == ArchiveSelectionDialog.SelectionResult.CreateNew)
-                {
-                    await HandleCreateNewAsync(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName,
-                        layoutInfo.ProjectUri, projectName);
-                }
-                else if (selectionDialog.Result == ArchiveSelectionDialog.SelectionResult.EditExisting)
-                {
-                    await HandleEditExistingAsync(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName,
-                        layoutInfo.ProjectUri, projectName);
-                }
+                // Start wizard navigation flow
+                RunNavigationFlow(layoutInfo.LayoutNames, layoutInfo.ActiveLayoutName,
+                    layoutInfo.ProjectUri, projectName);
 
                 Logger.Info("ArchiveButton.OnClick completed");
             }
@@ -74,33 +78,90 @@ namespace ArcLayoutSentinel
             }
         }
 
-        private async Task HandleCreateNewAsync(List<string> layoutNames, string activeLayoutName,
+        private void RunNavigationFlow(List<string> layoutNames, string activeLayoutName,
             string projectUri, string projectName)
         {
-            var dialog = new ArchiveMetadataDialog(layoutNames, activeLayoutName);
-            dialog.ProjectUri = projectUri;
-            dialog.ProjectName = projectName;
-            try { dialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
-            dialog.ShowDialog();
-        }
+            int currentState = 0;
+            MapInfo selectedMap = null;
 
-        private async Task HandleEditExistingAsync(List<string> layoutNames, string activeLayoutName,
-            string projectUri, string projectName)
-        {
-            var mapSelectionDialog = new MapSelectionDialog();
-            try { mapSelectionDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
-            mapSelectionDialog.ShowDialog();
+            while (true)
+            {
+                if (currentState == 0) // ArchiveSelectionDialog
+                {
+                    var selectionDialog = new ArchiveSelectionDialog();
+                    try { selectionDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+                    selectionDialog.ShowDialog();
 
-            if (mapSelectionDialog.SelectedMap == null) return;
+                    if (selectionDialog.Result == ArchiveSelectionDialog.SelectionResult.CreateNew)
+                    {
+                        currentState = 2; // Go to Metadata (Create Mode)
+                    }
+                    else if (selectionDialog.Result == ArchiveSelectionDialog.SelectionResult.EditExisting)
+                    {
+                        currentState = 1; // Go to Map Selection
+                    }
+                    else
+                    {
+                        break; // Cancelled
+                    }
+                }
+                else if (currentState == 1) // MapSelectionDialog
+                {
+                    var mapSelectionDialog = new MapSelectionDialog();
+                    try { mapSelectionDialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+                    mapSelectionDialog.ShowDialog();
 
-            var existingMap = mapSelectionDialog.SelectedMap;
-            Logger.Info("Selected map for edit: {UniqueID}", existingMap.UniqueId);
+                    if (mapSelectionDialog.IsBackClicked)
+                    {
+                        currentState = 0; // Go back to ArchiveSelectionDialog
+                    }
+                    else if (mapSelectionDialog.SelectedMap != null)
+                    {
+                        selectedMap = mapSelectionDialog.SelectedMap;
+                        currentState = 3; // Go to Metadata (Edit Mode)
+                    }
+                    else
+                    {
+                        break; // Cancelled
+                    }
+                }
+                else if (currentState == 2) // ArchiveMetadataDialog (Create Mode)
+                {
+                    var dialog = new ArchiveMetadataDialog(layoutNames, activeLayoutName);
+                    dialog.ProjectUri = projectUri;
+                    dialog.ProjectName = projectName;
+                    dialog.ShowBackButton(true);
+                    try { dialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+                    dialog.ShowDialog();
 
-            var dialog = new ArchiveMetadataDialog(layoutNames, activeLayoutName, existingMap);
-            dialog.ProjectUri = projectUri;
-            dialog.ProjectName = projectName;
-            try { dialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
-            dialog.ShowDialog();
+                    if (dialog.IsBackClicked)
+                    {
+                        currentState = 0; // Go back to ArchiveSelectionDialog
+                    }
+                    else
+                    {
+                        break; // Success or Cancelled
+                    }
+                }
+                else if (currentState == 3) // ArchiveMetadataDialog (Edit Mode)
+                {
+                    var dialog = new ArchiveMetadataDialog(layoutNames, activeLayoutName, selectedMap);
+                    dialog.ProjectUri = projectUri;
+                    dialog.ProjectName = projectName;
+                    dialog.ShowBackButton(true);
+                    try { dialog.Owner = FrameworkApplication.Current.MainWindow; } catch { }
+                    dialog.ShowDialog();
+
+                    if (dialog.IsBackClicked)
+                    {
+                        currentState = 1; // Go back to MapSelectionDialog
+                    }
+                    else
+                    {
+                        break; // Success or Cancelled
+                    }
+                }
+            }
         }
     }
 }

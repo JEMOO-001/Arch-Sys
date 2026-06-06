@@ -166,9 +166,12 @@ namespace ArcLayoutSentinel.Views
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            var settingsDialog = new SettingsDialog();
-            try { settingsDialog.Owner = this; } catch { }
-            settingsDialog.ShowDialog();
+            var dialog = new SettingsDialog();
+            dialog.Owner = this;
+            if (dialog.ShowDialog() == true)
+            {
+                _ = CheckServerStatusAsync();
+            }
         }
     }
 }

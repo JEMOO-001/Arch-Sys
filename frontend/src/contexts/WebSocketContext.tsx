@@ -23,11 +23,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return;
     }
 
-    // Using the same URL logic as API_URL but for ws://
-    // Default to localhost for now as per current setup
-    const wsUrl = `ws://localhost:8000/api/v1/ws/${token}`;
+    const getWsUrl = () => {
+      const apiEndpoint = import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000';
+      const wsProtocol = apiEndpoint.startsWith('https') ? 'wss:' : 'ws:';
+      const host = apiEndpoint.replace(/^https?:\/\//, '');
+      return `${wsProtocol}//${host}/api/v1/ws/${token}`;
+    };
+    const wsUrl = getWsUrl();
     
-    let reconnectTimeout: NodeJS.Timeout;
+    let reconnectTimeout: any;
 
     const connect = () => {
       console.log('Attempting to connect to WebSocket...');

@@ -1,11 +1,13 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using ArcGIS.Desktop.Core;
+
 namespace ArcLayoutSentinel.Services
 {
     public static class ConfigManager
     {
-        public static string BaseUrl { get; set; } = "http://localhost:8000/api/v1";
+        public static string BaseUrl { get; set; } = "http://172.20.0.149:8000/api/v1";
         public static string ArchiveRoot { get; set; } = @"\\172.20.0.125\e\LTest";
         public static string ApiToken { get; set; } = "";
         public static string LastUsername { get; set; } = "";
@@ -29,14 +31,14 @@ namespace ArcLayoutSentinel.Services
                     var config = JsonSerializer.Deserialize<ConfigSettings>(json);
                     if (config != null)
                     {
-                        BaseUrl = config.BaseUrl ?? BaseUrl;
-                        ArchiveRoot = config.ArchiveRoot ?? ArchiveRoot;
-                        ApiToken = config.ApiToken ?? ApiToken;
-                        LastUsername = config.LastUsername ?? LastUsername;
-                        SessionId = config.SessionId ?? "";
-                        MachineId = config.MachineId ?? "";
-                        SessionCreatedAt = config.SessionCreatedAt;
-                        SessionExpiresAt = config.SessionExpiresAt;
+                        if (!string.IsNullOrEmpty(config.BaseUrl)) BaseUrl = config.BaseUrl;
+                        if (!string.IsNullOrEmpty(config.ArchiveRoot)) ArchiveRoot = config.ArchiveRoot;
+                        if (!string.IsNullOrEmpty(config.ApiToken)) ApiToken = config.ApiToken;
+                        if (!string.IsNullOrEmpty(config.LastUsername)) LastUsername = config.LastUsername;
+                        if (!string.IsNullOrEmpty(config.SessionId)) SessionId = config.SessionId;
+                        if (!string.IsNullOrEmpty(config.MachineId)) MachineId = config.MachineId;
+                        if (config.SessionCreatedAt.HasValue) SessionCreatedAt = config.SessionCreatedAt;
+                        if (config.SessionExpiresAt.HasValue) SessionExpiresAt = config.SessionExpiresAt;
                     }
                 }
             }
@@ -77,18 +79,22 @@ namespace ArcLayoutSentinel.Services
         {
             try
             {
-                var project = ArcGIS.Desktop.Core.Project.Current;
-                if (project != null)
+                var path = GetProjectConfigPath();
+                if (path == null) return;
+
+                var config = new ConfigSettings
                 {
-                    project.SetCustomProperty("Sentinel_BaseUrl", BaseUrl);
-                    project.SetCustomProperty("Sentinel_ArchiveRoot", ArchiveRoot);
-                    project.SetCustomProperty("Sentinel_ApiToken", ApiToken);
-                    project.SetCustomProperty("Sentinel_LastUsername", LastUsername);
-                    project.SetCustomProperty("Sentinel_SessionId", SessionId);
-                    project.SetCustomProperty("Sentinel_SessionCreatedAt", SessionCreatedAt?.ToString("o") ?? "");
-                    project.SetCustomProperty("Sentinel_SessionExpiresAt", SessionExpiresAt?.ToString("o") ?? "");
-                    System.Diagnostics.Debug.WriteLine("ConfigManager: Settings saved to project.");
-                }
+                    BaseUrl = BaseUrl,
+                    ArchiveRoot = ArchiveRoot,
+                    ApiToken = ApiToken,
+                    LastUsername = LastUsername,
+                    SessionId = SessionId,
+                    MachineId = MachineId,
+                    SessionCreatedAt = SessionCreatedAt,
+                    SessionExpiresAt = SessionExpiresAt
+                };
+                File.WriteAllText(path, JsonSerializer.Serialize(config));
+                System.Diagnostics.Debug.WriteLine($"ConfigManager: Settings saved to {path}");
             }
             catch (Exception ex)
             {
@@ -100,37 +106,42 @@ namespace ArcLayoutSentinel.Services
         {
             try
             {
-                var project = ArcGIS.Desktop.Core.Project.Current;
-                if (project != null)
+                var path = GetProjectConfigPath();
+                if (path == null || !File.Exists(path)) return;
+
+                var json = File.ReadAllText(path);
+                var config = JsonSerializer.Deserialize<ConfigSettings>(json);
+                if (config != null)
                 {
-                    var baseUrl = project.GetCustomProperty("Sentinel_BaseUrl") as string;
-                    if (!string.IsNullOrEmpty(baseUrl)) BaseUrl = baseUrl;
-
-                    var archiveRoot = project.GetCustomProperty("Sentinel_ArchiveRoot") as string;
-                    if (!string.IsNullOrEmpty(archiveRoot)) ArchiveRoot = archiveRoot;
-
-                    var apiToken = project.GetCustomProperty("Sentinel_ApiToken") as string;
-                    if (!string.IsNullOrEmpty(apiToken)) ApiToken = apiToken;
-
-                    var lastUsername = project.GetCustomProperty("Sentinel_LastUsername") as string;
-                    if (!string.IsNullOrEmpty(lastUsername)) LastUsername = lastUsername;
-
-                    var sessionId = project.GetCustomProperty("Sentinel_SessionId") as string;
-                    if (!string.IsNullOrEmpty(sessionId)) SessionId = sessionId;
-
-                    var createdAtStr = project.GetCustomProperty("Sentinel_SessionCreatedAt") as string;
-                    if (DateTime.TryParse(createdAtStr, out var createdAt)) SessionCreatedAt = createdAt;
-
-                    var expiresAtStr = project.GetCustomProperty("Sentinel_SessionExpiresAt") as string;
-                    if (DateTime.TryParse(expiresAtStr, out var expiresAt)) SessionExpiresAt = expiresAt;
-
-                    System.Diagnostics.Debug.WriteLine("ConfigManager: Settings loaded from project.");
+                    if (!string.IsNullOrEmpty(config.BaseUrl)) BaseUrl = config.BaseUrl;
+                    if (!string.IsNullOrEmpty(config.ArchiveRoot)) ArchiveRoot = config.ArchiveRoot;
+                    if (!string.IsNullOrEmpty(config.ApiToken)) ApiToken = config.ApiToken;
+                    if (!string.IsNullOrEmpty(config.LastUsername)) LastUsername = config.LastUsername;
+                    if (!string.IsNullOrEmpty(config.SessionId)) SessionId = config.SessionId;
+                    if (config.SessionCreatedAt.HasValue) SessionCreatedAt = config.SessionCreatedAt;
+                    if (config.SessionExpiresAt.HasValue) SessionExpiresAt = config.SessionExpiresAt;
+                    System.Diagnostics.Debug.WriteLine($"ConfigManager: Settings loaded from {path}");
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"ConfigManager.LoadFromProject failed: {ex.Message}");
             }
+        }
+
+        private static string GetProjectConfigPath()
+        {
+            try
+            {
+                var project = ArcGIS.Desktop.Core.Project.Current;
+                if (project == null || string.IsNullOrEmpty(project.URI)) return null;
+                
+                var projectFolder = Path.GetDirectoryName(project.URI);
+                if (string.IsNullOrEmpty(projectFolder)) return null;
+
+                return Path.Combine(projectFolder, ".sentinel_config");
+            }
+            catch { return null; }
         }
 
         public static void ClearSession()

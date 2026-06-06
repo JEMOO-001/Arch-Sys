@@ -1,20 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from typing import List, Optional
 import logging
+import os
+import uuid
 from datetime import datetime, timedelta, timezone
+from ..core.config import settings
 
 from ..database import get_db
 
 logger = logging.getLogger(__name__)
-from ..models.maps import Map, AuditLog, MapComment
+from ..models.maps import Map, AuditLog, MapComment, Notification
 from ..models.base import User
 from ..schemas.maps import MapCreate, MapResponse, MapUpdate, MapEditUpdate, MapApprovalUpdate, MapCommentCreate, MapCommentResponse
 from ..services.id_generator import generate_unique_id
 from ..dependencies.auth import get_current_user, TokenData
 from ..services.audit import log_change, log_multiple_changes
+from ..services.websocket import manager
 
 router = APIRouter(prefix="/maps", tags=["Maps"])
 
@@ -31,7 +35,7 @@ def check_map_authorization(current_user: TokenData, db_map: Map, mode: str = "e
         return
     
     # SECURITY: tenant isolation
-    if db_map.tenant_id != 1: # Assuming tenant 1 for this deployment
+    if db_map.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     # NOTE: All users in the same tenant are allowed to view/edit maps as requested.
@@ -110,7 +114,7 @@ async def create_map(
         **dump,
         unique_id=unique_id,
         analyst_id=current_user.user_id,
-        tenant_id=1,
+        tenant_id=current_user.tenant_id or 1,
         created_at=datetime.now(timezone.utc) + timedelta(hours=3),
     )
 
@@ -136,7 +140,7 @@ async def list_maps(
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user),
 ):
-    query = select(Map, User.full_name.label("analyst_name")).join(User, Map.analyst_id == User.user_id).where(Map.tenant_id == 1)
+    query = select(Map, User.full_name.label("analyst_name")).join(User, Map.analyst_id == User.user_id).where(Map.tenant_id == current_user.tenant_id)
 
     if status:
         query = query.where(Map.status == status)
@@ -169,7 +173,7 @@ async def list_my_maps(
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
 
-    query = select(Map, User.full_name.label("analyst_name")).join(User, Map.analyst_id == User.user_id).where(Map.analyst_id == current_user.user_id, Map.tenant_id == 1)
+    query = select(Map, User.full_name.label("analyst_name")).join(User, Map.analyst_id == User.user_id).where(Map.analyst_id == current_user.user_id, Map.tenant_id == current_user.tenant_id)
 
     if status_filter:
         query = query.where(Map.status == status_filter)
@@ -205,7 +209,7 @@ async def get_map(
         raise HTTPException(status_code=404, detail="Map record not found")
 
     db_map, analyst_name = row
-    if db_map.tenant_id != 1:
+    if db_map.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     map_dict = {c.name: getattr(db_map, c.name) for c in db_map.__table__.columns}
@@ -244,7 +248,7 @@ async def update_map(
     if changes:
         changes_list = [f"{k}: {v[0]} -> {v[1]}" for k, v in changes.items() if v[0] != v[1]]
         if changes_list:
-            await log_change(db, map_id, current_user.user_id, "batch", "\n".join(changes_list), "")
+            await log_change(db, map_id, current_user.user_id, "batch", "", "\n".join(changes_list))
 
     await db.commit()
     await db.refresh(db_map)
@@ -286,7 +290,7 @@ async def reexport_map(
 
     if changes:
         changes_list = [f"{k}: {v[0]} -> {v[1]}" for k, v in changes.items()]
-        await log_change(db, map_id, current_user.user_id, "batch", "\n".join(changes_list), "")
+        await log_change(db, map_id, current_user.user_id, "batch", "", "\n".join(changes_list))
 
     db_map.updated_at = datetime.now(timezone.utc) + timedelta(hours=3)
 
@@ -308,20 +312,17 @@ async def update_map_approval(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admin can change approval status")
 
-    if approval_in.approval_status in {"Editing Required", "On Hold"} and not approval_in.approval_comment:
-        raise HTTPException(status_code=400, detail="Approval comment is required for this decision")
-
     result = await db.execute(select(Map).where(Map.map_id == map_id))
     db_map = result.scalar_one_or_none()
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
-    if db_map.tenant_id != 1:
+    if db_map.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     old_status  = db_map.approval_status or ""
     old_comment = db_map.approval_comment or ""
     db_map.approval_status  = approval_in.approval_status
-    db_map.approval_comment = approval_in.approval_comment
+    db_map.approval_comment = approval_in.approval_comment or ""
     db_map.approved_by  = current_user.user_id
     db_map.approved_at  = datetime.now(timezone.utc) + timedelta(hours=3)
     db_map.updated_at   = datetime.now(timezone.utc) + timedelta(hours=3)
@@ -338,8 +339,39 @@ async def update_map_approval(
     if old_comment != (db_map.approval_comment or ""):
         await log_change(db, map_id, current_user.user_id, "approval_comment", old_comment, db_map.approval_comment or "")
 
+    # REAL-TIME: Notify Analyst of the decision
+    if db_map.analyst_id != current_user.user_id:
+        msg = f"{current_user.username} required Editing in Map {db_map.unique_id}"
+        if db_map.approval_status == "Approve":
+            msg = f"{current_user.username} Approve The Map Ready For Print {db_map.unique_id}"
+        elif db_map.approval_status == "On Hold":
+            msg = f"{current_user.username} Set Current Map {db_map.unique_id} As On Hold"
+
+        db_notif = Notification(
+            user_id=db_map.analyst_id,
+            map_id=map_id,
+            type="status_change",
+            message=msg,
+            created_at=datetime.now(timezone.utc) + timedelta(hours=3),
+            tenant_id=current_user.tenant_id or 1
+        )
+        db.add(db_notif)
+
     await db.commit()
     await db.refresh(db_map)
+
+    # Push notification AFTER successful commit
+    if db_map.analyst_id != current_user.user_id:
+        await manager.send_personal_message({
+            "type": "NOTIFICATION",
+            "data": {
+                "id": 0,
+                "map_id": map_id,
+                "message": msg,
+                "type": "status_change"
+            }
+        }, db_map.analyst_id)
+
     return db_map
 
 
@@ -356,7 +388,7 @@ async def list_map_comments(
     db_map = map_result.scalar_one_or_none()
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
-    if db_map.tenant_id != 1:
+    if db_map.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Access denied")
     check_map_authorization(current_user, db_map, mode="view")
 
@@ -376,6 +408,7 @@ async def list_map_comments(
             "user_id": comment.user_id,
             "username": username,
             "message": comment.message,
+            "attachment_path": comment.attachment_path,
             "created_at": comment.created_at,
             "updated_at": comment.updated_at
         }
@@ -387,7 +420,8 @@ async def list_map_comments(
 @router.post("/{map_id}/comments", response_model=MapCommentResponse)
 async def create_map_comment(
     map_id: int,
-    comment_in: MapCommentCreate,
+    message: str = Form(""),
+    file: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user),
 ):
@@ -398,18 +432,35 @@ async def create_map_comment(
     db_map = map_result.scalar_one_or_none()
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
-    if db_map.tenant_id != 1:
+    if db_map.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Access denied")
     check_map_authorization(current_user, db_map, mode="view")
+
+    attachment_path = None
+    if file:
+        # Secure filename and save
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in [".jpg", ".jpeg", ".png", ".gif"]:
+            raise HTTPException(status_code=400, detail="Only images are allowed (.jpg, .png, .gif)")
+        
+        filename = f"{uuid.uuid4()}{ext}"
+        filepath = os.path.join(settings.UPLOAD_DIR, filename)
+        
+        with open(filepath, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        attachment_path = f"/static/uploads/{filename}"
 
     now = datetime.now(timezone.utc) + timedelta(hours=3)
     db_comment = MapComment(
         map_id=map_id,
         user_id=current_user.user_id,
-        message=comment_in.message.strip(),
+        message=message.strip(),
+        attachment_path=attachment_path,
         created_at=now,
         updated_at=now,
-        tenant_id=1,
+        tenant_id=current_user.tenant_id or 1,
     )
     db.add(db_comment)
     await db.commit()
@@ -420,13 +471,66 @@ async def create_map_comment(
     username = user_result.scalar()
 
     await log_change(db, map_id, current_user.user_id, "comment_thread", "", "Added map comment")
-    
+
+    # REAL-TIME: Notify recipient
+    # If Admin commented, notify Analyst. If Analyst commented, notify Admins.
+    notif_targets = []
+    if current_user.role == "admin":
+        notif_targets = [db_map.analyst_id]
+    else:
+        # Notify all admins in tenant 1
+        admin_result = await db.execute(select(User.user_id).where(User.role == "admin", User.tenant_id == current_user.tenant_id))
+        notif_targets = admin_result.scalars().all()
+
+    for target_id in notif_targets:
+        if target_id == current_user.user_id: continue
+
+        db_notif = Notification(
+            user_id=target_id,
+            map_id=map_id,
+            type="comment",
+            message=f"{current_user.username} Sent New message at Map {db_map.unique_id}",
+            created_at=now,
+            tenant_id=current_user.tenant_id or 1
+        )
+        db.add(db_notif)
+
+    await db.commit()
+
+    # Push notifications AFTER successful commit
+    for target_id in notif_targets:
+        if target_id == current_user.user_id: continue
+        await manager.send_personal_message({
+            "type": "NOTIFICATION",
+            "data": {
+                "id": 0,
+                "map_id": map_id,
+                "message": f"{current_user.username} Sent New message at Map {db_map.unique_id}",
+                "type": "comment"
+            }
+        }, target_id)
+
+    # Broadcast message to anyone viewing this map
+    await manager.broadcast({
+        "type": "CHAT_MESSAGE",
+        "data": {
+            "comment_id": db_comment.comment_id,
+            "map_id": db_comment.map_id,
+            "user_id": db_comment.user_id,
+            "username": username,
+            "message": db_comment.message,
+            "attachment_path": attachment_path,
+            "created_at": db_comment.created_at.isoformat()
+        }
+    })
+
     return {
         "comment_id": db_comment.comment_id,
         "map_id": db_comment.map_id,
         "user_id": db_comment.user_id,
         "username": username,
         "message": db_comment.message,
+        "attachment_path": attachment_path,
         "created_at": db_comment.created_at,
         "updated_at": db_comment.updated_at
     }
@@ -450,7 +554,7 @@ def format_audit_action(field_name: str, old_value: str, new_value: str) -> str:
     new = new_value or "(empty)"
 
     if field_name == "batch":
-        return f"Updated:\n{old}"
+        return f"Updated:\n{new}"
 
     return f"Changed {field_name}: {old} → {new}"
 
@@ -468,7 +572,7 @@ async def get_audit_log(
     db_map = map_result.scalar_one_or_none()
     if not db_map:
         raise HTTPException(status_code=404, detail="Map record not found")
-    if db_map.tenant_id != 1:
+    if db_map.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     result = await db.execute(
@@ -508,6 +612,8 @@ async def check_audit_logs_batch(
         raise HTTPException(status_code=400, detail="Too many map IDs (max 500)")
 
     result = await db.execute(
-        select(AuditLog.map_id).where(AuditLog.map_id.in_(map_ids)).distinct()
+        select(AuditLog.map_id)
+        .where(AuditLog.map_id.in_(map_ids), AuditLog.tenant_id == current_user.tenant_id)
+        .distinct()
     )
     return {"maps_with_audit": [row[0] for row in result.fetchall()]}

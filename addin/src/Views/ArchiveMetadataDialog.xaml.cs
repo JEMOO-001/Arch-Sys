@@ -43,7 +43,7 @@ namespace ArcLayoutSentinel.Views
             }
         }
         public string ToWhom => ToWhomComboBox.SelectedItem is ComboBoxItem ci ? (ci.Content?.ToString() ?? "") : (ToWhomComboBox.Text ?? "");
-        public string Status => "Complete";
+        public string Status => "In Progress";
         public string Comment => CommentTextBox.Text ?? "";
         public string IncomeNum => IncomeNumTextBox.Text ?? "";
         public string OutcomeNum => OutcomeNumTextBox.Text ?? "";
@@ -86,10 +86,18 @@ namespace ArcLayoutSentinel.Views
             if (LayoutComboBox.Items.Count > 0) LayoutComboBox.SelectedIndex = 0;
 
             PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#888888"));
-            ApplyTheme();
+            ThemeHelper.ApplyTheme(this);
 
-            _ = LoadCategoriesAsync();
-            _ = RunPreFlightCheckAsync();
+            if (!string.IsNullOrEmpty(ConfigManager.ApiToken))
+            {
+                _ = LoadCategoriesAsync();
+                _ = RunPreFlightCheckAsync();
+            }
+            else
+            {
+                PreFlightText.Text = "Login required";
+                PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#cc0000"));
+            }
         }
 
         public ArchiveMetadataDialog(List<string> layoutNames, string activeLayoutName, MapInfo existingMap)
@@ -149,11 +157,20 @@ namespace ArcLayoutSentinel.Views
 
             CommentTextBox.Text = existingMap.Comment ?? "";
 
-            PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3B6D11"));
-            PreFlightText.Text = "Pre-flight passed — ready to update";
-            ArchiveBtn.IsEnabled = true;
+            PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#888888"));
+            PreFlightText.Text = "Checking pre-flight...";
+            ThemeHelper.ApplyTheme(this);
 
-            _ = LoadCategoriesAsync();
+            if (!string.IsNullOrEmpty(ConfigManager.ApiToken))
+            {
+                _ = LoadCategoriesAsync();
+                _ = RunPreFlightCheckAsync();
+            }
+            else
+            {
+                PreFlightText.Text = "Login required";
+                PreFlightIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#cc0000"));
+            }
         }
 
         private async System.Threading.Tasks.Task LoadCategoriesAsync()
@@ -315,10 +332,10 @@ namespace ArcLayoutSentinel.Views
             {
                 ArchiveBtn.Content = "Close";
                 ArchiveBtn.IsEnabled = true;
-                ArchiveBtn.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3B6D11"));
+                ArchiveBtn.Background = ThemeHelper.FindBrush(this, "Sentinel.SuccessBrush");
                 CancelBtn.Visibility = Visibility.Collapsed;
-                ResultText.Text = $"Archived successfully!\nID: {ArchiveId}";
-                ResultText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6fcf97"));
+                ResultText.Text = $"Archived successfully as In Progress.\nID: {ArchiveId}";
+                ResultText.Foreground = ThemeHelper.FindBrush(this, "Sentinel.SuccessBrush");
                 ResultText.Visibility = Visibility.Visible;
                 ArchiveSucceeded = true;
             }
@@ -326,9 +343,9 @@ namespace ArcLayoutSentinel.Views
             {
                 ArchiveBtn.Content = "Retry";
                 ArchiveBtn.IsEnabled = true;
-                ArchiveBtn.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0078D4"));
+                ArchiveBtn.Background = ThemeHelper.FindBrush(this, "Sentinel.AccentBrush");
                 ResultText.Text = $"Error: {error ?? "Unknown error"}";
-                ResultText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#f87171"));
+                ResultText.Foreground = ThemeHelper.FindBrush(this, "Sentinel.ErrorBrush");
                 ResultText.Visibility = Visibility.Visible;
                 ArchiveSucceeded = false;
 
@@ -400,7 +417,7 @@ namespace ArcLayoutSentinel.Views
                 income_num = incomeNum,
                 outcome_num = outcomeNum,
                 to_whom = toWhom,
-                status = status ?? "Complete",
+                status = status ?? "In Progress",
                 comment = comment,
                 file_path = exportedFilePath,
                 category_prefix = categoryPrefix
@@ -465,7 +482,7 @@ namespace ArcLayoutSentinel.Views
                 income_num = incomeNum,
                 outcome_num = outcomeNum,
                 to_whom = toWhom,
-                status = status ?? "Complete",
+                status = status ?? "In Progress",
                 comment = comment,
                 file_path = newExportedFilePath,
                 category_prefix = categoryPrefix
@@ -517,85 +534,6 @@ namespace ArcLayoutSentinel.Views
                 DialogResult = false;
         }
 
-        private void ApplyTheme()
-        {
-            bool isDark = ThemeHelper.IsDarkTheme();
-
-            var bg = isDark ? "#252525" : "#F3F3F3";
-            var surface = isDark ? "#333333" : "#FFFFFF";
-            var surface2 = isDark ? "#2a2a2a" : "#F0F0F0";
-            var border = isDark ? "#3a3a3a" : "#D9D9D9";
-            var text = isDark ? "#e6e6e6" : "#1A1A1A";
-            var textSecondary = isDark ? "#999999" : "#4A4A4A";
-            var muted = isDark ? "#666666" : "#8A8A8A";
-
-            var bgBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(bg));
-            var surfaceBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(surface));
-            var surface2Brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(surface2));
-            var borderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(border));
-            var textBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(text));
-            var textSecondaryBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(textSecondary));
-            var mutedBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(muted));
-
-            Background = bgBrush;
-            ContentScrollViewer.Background = bgBrush;
-
-            HeaderBorder.Background = surfaceBrush;
-            HeaderBorder.BorderBrush = borderBrush;
-            HeaderTitle.Foreground = textBrush;
-            HeaderSubtitle.Foreground = textSecondaryBrush;
-
-            FooterBorder.Background = surfaceBrush;
-            FooterBorder.BorderBrush = borderBrush;
-            CancelBtn.Foreground = textBrush;
-            CancelBtn.Background = new SolidColorBrush(ThemeHelper.IsDarkTheme()
-                ? (Color)ColorConverter.ConvertFromString("#444444")
-                : (Color)ColorConverter.ConvertFromString("#D4D4D4"));
-
-            PreFlightBorder.Background = surface2Brush;
-            PreFlightBorder.BorderBrush = borderBrush;
-            PreFlightText.Foreground = textSecondaryBrush;
-
-            var inputBg = new SolidColorBrush(isDark
-                ? (Color)ColorConverter.ConvertFromString("#2a2a2a")
-                : (Color)ColorConverter.ConvertFromString("#FFFFFF"));
-            var inputBorder = borderBrush;
-
-            // ComboBox dropdown item style (fixes invisible text in dropdowns)
-            var cbItemStyle = new Style(typeof(ComboBoxItem));
-            cbItemStyle.Setters.Add(new Setter(ComboBoxItem.ForegroundProperty, textBrush));
-            cbItemStyle.Setters.Add(new Setter(ComboBoxItem.BackgroundProperty, inputBg));
-            Resources[typeof(ComboBoxItem)] = cbItemStyle;
-
-            LayoutComboBox.Background = inputBg;
-            LayoutComboBox.Foreground = textBrush;
-            LayoutComboBox.BorderBrush = inputBorder;
-            CategoryComboBox.Background = inputBg;
-            CategoryComboBox.Foreground = textBrush;
-            CategoryComboBox.BorderBrush = inputBorder;
-            ExportFormatComboBox.Background = inputBg;
-            ExportFormatComboBox.Foreground = textBrush;
-            ExportFormatComboBox.BorderBrush = inputBorder;
-            DpiComboBox.Background = inputBg;
-            DpiComboBox.Foreground = textBrush;
-            DpiComboBox.BorderBrush = inputBorder;
-            IncomeNumTextBox.Background = inputBg;
-            IncomeNumTextBox.Foreground = textBrush;
-            IncomeNumTextBox.BorderBrush = inputBorder;
-            OutcomeNumTextBox.Background = inputBg;
-            OutcomeNumTextBox.Foreground = textBrush;
-            OutcomeNumTextBox.BorderBrush = inputBorder;
-            ToWhomComboBox.Background = inputBg;
-            ToWhomComboBox.Foreground = textBrush;
-            ToWhomComboBox.BorderBrush = inputBorder;
-            CommentTextBox.Background = inputBg;
-            CommentTextBox.Foreground = textBrush;
-            CommentTextBox.BorderBrush = inputBorder;
-            UniqueIdTextBox.Background = inputBg;
-            UniqueIdTextBox.Foreground = mutedBrush;
-            UniqueIdTextBox.BorderBrush = inputBorder;
-        }
-
         private void TryDeleteFile(string filePath)
         {
             if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
@@ -607,5 +545,23 @@ namespace ArcLayoutSentinel.Views
         public PreFlightResult GetPreFlightResult() => _lastPreFlightResult;
         public int? GetEditingMapId() => _editingMapId;
         public bool IsEditMode() => _isEditMode;
+
+        public bool IsBackClicked { get; private set; } = false;
+
+        public void ShowBackButton(bool show)
+        {
+            if (BackBtn != null)
+            {
+                BackBtn.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        private void BackButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isProcessing) return;
+            IsBackClicked = true;
+            DialogResult = false;
+            Close();
+        }
     }
 }

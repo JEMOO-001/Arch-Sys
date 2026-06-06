@@ -9,7 +9,8 @@ CREATE TABLE Categories (
     category_id INT IDENTITY(1,1) PRIMARY KEY,
     name NVARCHAR(100) NOT NULL UNIQUE,
     prefix NVARCHAR(5) NOT NULL UNIQUE, -- e.g., 'AB'
-    description NVARCHAR(MAX)
+    description NVARCHAR(MAX),
+    tenant_id INT NOT NULL DEFAULT 1
 );
 GO
 
@@ -18,7 +19,8 @@ CREATE TABLE Projects (
     project_id INT IDENTITY(1,1) PRIMARY KEY,
     project_code NVARCHAR(50) NOT NULL UNIQUE,
     client_name NVARCHAR(200) NOT NULL,
-    active BIT DEFAULT 1
+    active BIT DEFAULT 1,
+    tenant_id INT NOT NULL DEFAULT 1
 );
 GO
 
@@ -28,9 +30,10 @@ CREATE TABLE Users (
     username NVARCHAR(50) NOT NULL UNIQUE,
     password_hash NVARCHAR(MAX) NOT NULL,
     full_name NVARCHAR(100) NOT NULL,
-    role NVARCHAR(20) NOT NULL CHECK (role IN ('admin', 'owner', 'analyst', 'readonly')),
+    role NVARCHAR(20) NOT NULL CHECK (role IN ('admin', 'edit')),
     active BIT DEFAULT 1,
-    created_at DATETIME DEFAULT GETDATE()
+    created_at DATETIME DEFAULT GETDATE(),
+    tenant_id INT NOT NULL DEFAULT 1
 );
 GO
 
@@ -40,18 +43,22 @@ CREATE TABLE Maps (
     unique_id NVARCHAR(20) NOT NULL UNIQUE, -- e.g., 'AB-0001'
     layout_name NVARCHAR(200) NOT NULL,
     project_path NVARCHAR(MAX) NOT NULL,
-    project_code NVARCHAR(50) NOT NULL,
-    client_name NVARCHAR(200) NOT NULL,
+    project_name NVARCHAR(50) NOT NULL,
     category NVARCHAR(100) NOT NULL,
     income_num NVARCHAR(50),
     outcome_num NVARCHAR(50),
     to_whom NVARCHAR(200),
-    status NVARCHAR(20) NOT NULL DEFAULT 'Not Started' CHECK (status IN ('Not Started', 'In Progress', 'Complete', 'On Hold')),
+    status NVARCHAR(20) NOT NULL DEFAULT 'In Progress' CHECK (status IN ('In Progress', 'Complete')),
     comment NVARCHAR(MAX),
+    approval_status NVARCHAR(30) CHECK (approval_status IS NULL OR approval_status IN ('Approve', 'Editing Required', 'On Hold')),
+    approval_comment NVARCHAR(MAX),
+    approved_by INT FOREIGN KEY REFERENCES Users(user_id),
+    approved_at DATETIME,
     file_path NVARCHAR(MAX) NOT NULL, -- UNC Path
     analyst_id INT NOT NULL FOREIGN KEY REFERENCES Users(user_id),
     created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME
+    updated_at DATETIME,
+    tenant_id INT NOT NULL DEFAULT 1
 );
 GO
 
@@ -63,21 +70,52 @@ CREATE TABLE Audit_Log (
     old_value NVARCHAR(MAX),
     new_value NVARCHAR(MAX),
     changed_by INT NOT NULL FOREIGN KEY REFERENCES Users(user_id),
-    changed_at DATETIME DEFAULT GETDATE()
+    changed_at DATETIME DEFAULT GETDATE(),
+    tenant_id INT NOT NULL DEFAULT 1
 );
 GO
 
--- 6. Sequence for Unique ID generation per Category
--- Note: Simplified global sequence for v1.0
+-- 6. Map_Comments Table
+CREATE TABLE Map_Comments (
+    comment_id INT IDENTITY(1,1) PRIMARY KEY,
+    map_id INT NOT NULL FOREIGN KEY REFERENCES Maps(map_id),
+    user_id INT NOT NULL FOREIGN KEY REFERENCES Users(user_id),
+    message NVARCHAR(MAX) NOT NULL,
+    attachment_path NVARCHAR(MAX) NULL,
+    created_at DATETIME DEFAULT GETDATE(),
+    updated_at DATETIME,
+    deleted_at DATETIME,
+    tenant_id INT NOT NULL DEFAULT 1
+);
+GO
+
+-- 7. Notifications Table
+CREATE TABLE notifications (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    user_id INT NOT NULL FOREIGN KEY REFERENCES Users(user_id),
+    map_id INT NOT NULL FOREIGN KEY REFERENCES Maps(map_id),
+    type VARCHAR(50) NOT NULL, -- 'comment', 'status_change'
+    message NVARCHAR(MAX) NOT NULL,
+    is_read BIT DEFAULT 0,
+    created_at DATETIME2 DEFAULT GETDATE(),
+    tenant_id INT NOT NULL DEFAULT 1
+);
+GO
+
+-- 8. Sequence for Unique ID generation per Category
 CREATE SEQUENCE LayoutIDSequence
     START WITH 1
     INCREMENT BY 1;
 GO
 
--- 7. Indexes for Performance
+-- 9. Indexes for Performance
 CREATE INDEX IX_Maps_UniqueID ON Maps(unique_id);
-CREATE INDEX IX_Maps_ProjectCode ON Maps(project_code);
+CREATE INDEX IX_Maps_ProjectName ON Maps(project_name);
 CREATE INDEX IX_Maps_AnalystID ON Maps(analyst_id);
 CREATE INDEX IX_Maps_Status ON Maps(status);
+CREATE INDEX IX_Maps_TenantID ON Maps(tenant_id);
 CREATE INDEX IX_Audit_MapID ON Audit_Log(map_id);
+CREATE INDEX IX_MapComments_MapID ON Map_Comments(map_id);
+CREATE INDEX IX_Notifications_UserId ON notifications(user_id);
+CREATE INDEX IX_Notifications_MapId ON notifications(map_id);
 GO

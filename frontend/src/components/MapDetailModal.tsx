@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { Eye, Download, Pen, History, ArrowLeft, FileText, Calendar, User, Folder, MapPin, Hash, Tag, MessageSquare, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Eye, Download, Pen, History, ArrowLeft, FileText, Calendar, User, Folder, MapPin, Hash, Tag, MessageSquare, CheckCircle, Clock } from 'lucide-react';
 
 interface MapRecord {
   map_id: number;
@@ -11,6 +11,8 @@ interface MapRecord {
   project_name: string;
   category?: string;
   status: string;
+  approval_status?: string | null;
+  approval_comment?: string | null;
   income_num?: string;
   outcome_num?: string;
   to_whom?: string;
@@ -19,6 +21,16 @@ interface MapRecord {
   created_at: string;
   updated_at?: string;
   analyst_id: number;
+}
+
+interface MapComment {
+  comment_id: number;
+  map_id: number;
+  user_id: number;
+  username?: string;
+  message: string;
+  attachment_path?: string | null;
+  created_at: string;
 }
 
 interface MapDetailModalProps {
@@ -32,6 +44,11 @@ interface MapDetailModalProps {
   hasAuditLog?: (mapId: number) => boolean;
   currentUserId: number;
   userRole: string;
+  comments: MapComment[];
+  loadingComments: boolean;
+  onLoadComments: (mapId: number) => void;
+  onPostComment: (mapId: number, message: string, file?: File) => Promise<void>;
+  onUpdateApproval: (mapId: number, approvalStatus: string, approvalComment: string) => Promise<void>;
 }
 
 export const MapDetailModal: React.FC<MapDetailModalProps> = ({
@@ -45,17 +62,35 @@ export const MapDetailModal: React.FC<MapDetailModalProps> = ({
   hasAuditLog,
   currentUserId,
   userRole,
+  comments,
+  loadingComments,
+  onLoadComments,
+  onPostComment,
+  onUpdateApproval,
 }) => {
+  const [newMessage, setNewMessage] = useState('');
+  const [approvalStatus, setApprovalStatus] = useState('');
+  const [approvalComment, setApprovalComment] = useState('');
+  const [approvalSaving, setApprovalSaving] = useState(false);
+  const [messageSaving, setMessageSaving] = useState(false);
+
+  useEffect(() => {
+    if (!record || !isOpen) return;
+    onLoadComments(record.map_id);
+    setApprovalStatus(record.approval_status || '');
+    setApprovalComment(record.approval_comment || '');
+  }, [record?.map_id, isOpen]);
+
   if (!record) return null;
 
-  const canEdit = userRole === 'admin' || userRole === 'owner' || record.analyst_id === currentUserId;
+  const canEdit = userRole.toLowerCase().trim() === 'admin' || record.analyst_id === currentUserId;
+  const isAdmin = userRole.toLowerCase().trim() === 'admin';
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'Complete': return <CheckCircle className="h-5 w-5 text-green-600" />;
       case 'In Progress': return <Clock className="h-5 w-5 text-blue-600" />;
-      case 'On Hold': return <AlertCircle className="h-5 w-5 text-yellow-600" />;
-      default: return <Clock className="h-5 w-5 text-gray-600" />;
+      default: return <Clock className="h-5 w-5 text-blue-600" />;
     }
   };
 
@@ -63,8 +98,32 @@ export const MapDetailModal: React.FC<MapDetailModalProps> = ({
     switch (status) {
       case 'Complete': return 'bg-green-50 text-green-800 border-green-200';
       case 'In Progress': return 'bg-blue-50 text-blue-800 border-blue-200';
-      case 'On Hold': return 'bg-yellow-50 text-yellow-800 border-yellow-200';
-      default: return 'bg-gray-50 text-gray-800 border-gray-200';
+      default: return 'bg-blue-50 text-blue-800 border-blue-200';
+    }
+  };
+
+  const handleSaveApproval = async () => {
+    if (!approvalStatus) return;
+    if ((approvalStatus === 'Editing Required' || approvalStatus === 'On Hold') && !approvalComment.trim()) {
+      alert('Approval comment is required for Editing Required or On Hold.');
+      return;
+    }
+    setApprovalSaving(true);
+    try {
+      await onUpdateApproval(record.map_id, approvalStatus, approvalComment.trim());
+    } finally {
+      setApprovalSaving(false);
+    }
+  };
+
+  const handlePostComment = async () => {
+    if (!newMessage.trim()) return;
+    setMessageSaving(true);
+    try {
+      await onPostComment(record.map_id, newMessage.trim());
+      setNewMessage('');
+    } finally {
+      setMessageSaving(false);
     }
   };
 
@@ -80,126 +139,63 @@ export const MapDetailModal: React.FC<MapDetailModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={''} size="lg">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b pb-4">
+      <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2">
+        <div className="flex items-center justify-between border-b pb-4 sticky top-0 bg-white z-10">
           <div className="flex items-center gap-3">
             <Button variant="secondary" onClick={onClose} className="flex items-center gap-2">
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Record Details</h2>
-              <span className="font-mono text-blue-600 font-medium">{record.unique_id}</span>
+              <h2 className="text-xl font-bold text-gray-900 leading-tight">Record Details</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="font-mono text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">{record.unique_id}</span>
+                <span className="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                  {userRole}
+                </span>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => onViewNewTab(record)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="Preview"
-            >
+            <button onClick={() => onViewNewTab(record)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Preview">
               <Eye className="h-5 w-5" />
             </button>
-            <button
-              onClick={() => onDownload(record)}
-              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-              title="Download"
-            >
+            <button onClick={() => onDownload(record)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Download">
               <Download className="h-5 w-5" />
             </button>
             {canEdit && (
-              <button
-                onClick={() => { onClose(); onEdit(record); }}
-                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                title="Edit"
-              >
+              <button onClick={() => { onClose(); onEdit(record); }} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Edit">
                 <Pen className="h-5 w-5" />
               </button>
             )}
             {hasAuditLog && hasAuditLog(record.map_id) && (
-              <button
-                onClick={() => { onClose(); onAuditLog?.(record); }}
-                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                title="Audit Log"
-              >
+              <button onClick={() => { onClose(); onAuditLog?.(record); }} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors" title="Audit Log">
                 <History className="h-5 w-5" />
               </button>
             )}
           </div>
         </div>
 
-        {/* Details Grid */}
         <div className="grid grid-cols-2 gap-3">
-          <DetailRow
-            icon={<Hash className="h-4 w-4" />}
-            label="ID"
-            value={record.unique_id}
-          />
-          <DetailRow
-            icon={<MapPin className="h-4 w-4" />}
-            label="Layout"
-            value={record.layout_name}
-          />
-          <DetailRow
-            icon={<Folder className="h-4 w-4" />}
-            label="Project Name"
-            value={record.project_name}
-          />
-          <DetailRow
-            icon={<FileText className="h-4 w-4" />}
-            label="Project Path"
-            value={record.project_path}
-          />
-          <DetailRow
-            icon={<Tag className="h-4 w-4" />}
-            label="Category"
-            value={record.category}
-          />
-          <DetailRow
-            icon={<div className="text-xs font-bold">ر.و</div>}
-            label="رقم الوارد"
-            value={record.income_num}
-          />
-          <DetailRow
-            icon={<div className="text-xs font-bold">ر.ص</div>}
-            label="رقم الصادر"
-            value={record.outcome_num}
-          />
-          <DetailRow
-            icon={<User className="h-4 w-4" />}
-            label="جهه الولاية"
-            value={record.to_whom}
-          />
+          <DetailRow icon={<Hash className="h-4 w-4" />} label="ID" value={record.unique_id} />
+          <DetailRow icon={<MapPin className="h-4 w-4" />} label="Layout" value={record.layout_name} />
+          <DetailRow icon={<Folder className="h-4 w-4" />} label="Project Name" value={record.project_name} />
+          <DetailRow icon={<FileText className="h-4 w-4" />} label="Project Path" value={record.project_path} />
+          <DetailRow icon={<Tag className="h-4 w-4" />} label="Category" value={record.category} />
+          <DetailRow icon={<div className="text-xs font-bold">ر.و</div>} label="رقم الوارد" value={record.income_num} />
+          <DetailRow icon={<div className="text-xs font-bold">ر.ص</div>} label="رقم الصادر" value={record.outcome_num} />
+          <DetailRow icon={<User className="h-4 w-4" />} label="جهه الولاية" value={record.to_whom} />
           <DetailRow
             icon={getStatusIcon(record.status)}
             label="حالة الدراسة"
-            value={
-              <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium border ${getStatusColor(record.status)}`}>
-                {record.status}
-              </span>
-            }
+            value={<span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium border ${getStatusColor(record.status)}`}>{record.status}</span>}
           />
-          <DetailRow
-            icon={<Calendar className="h-4 w-4" />}
-            label="التاريخ"
-            value={new Date(record.created_at).toLocaleString()}
-          />
+          <DetailRow icon={<Calendar className="h-4 w-4" />} label="التاريخ" value={new Date(record.created_at).toLocaleString()} />
           <div className="col-span-2">
-            <DetailRow
-              icon={<MessageSquare className="h-4 w-4" />}
-              label="ملاحظات"
-              value={record.comment}
-              isWide
-            />
+            <DetailRow icon={<MessageSquare className="h-4 w-4" />} label="Legacy Note" value={record.comment} isWide />
           </div>
           <div className="col-span-2">
-            <DetailRow
-              icon={<FileText className="h-4 w-4" />}
-              label="File Path"
-              value={record.file_path}
-              isWide
-            />
+            <DetailRow icon={<FileText className="h-4 w-4" />} label="File Path" value={record.file_path} isWide />
           </div>
         </div>
       </div>

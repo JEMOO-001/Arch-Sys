@@ -8,6 +8,19 @@ namespace ArcLayoutSentinel.Services
 {
     public static class PreFlightService
     {
+        private static string GetHealthUrl()
+        {
+            try
+            {
+                var uri = new Uri(ConfigManager.BaseUrl);
+                return $"{uri.Scheme}://{uri.Authority}/health";
+            }
+            catch
+            {
+                return "http://172.20.0.149:8000/health";
+            }
+        }
+
         public static async Task<PreFlightResult> RunPreFlightCheckAsync()
         {
             var result = new PreFlightResult();
@@ -15,9 +28,9 @@ namespace ArcLayoutSentinel.Services
             try
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-var response = await client.GetAsync("http://localhost:8000/health");
-                    result.ApiReachable = response.IsSuccessStatusCode;
-                    if (!result.ApiReachable) result.ApiError = $"HTTP {(int)response.StatusCode}";
+                var response = await client.GetAsync(GetHealthUrl());
+                result.ApiReachable = response.IsSuccessStatusCode;
+                if (!result.ApiReachable) result.ApiError = $"HTTP {(int)response.StatusCode}";
             }
             catch (Exception ex) { result.ApiReachable = false; result.ApiError = $"{ex.GetType().Name}: {ex.Message}"; }
 
@@ -52,7 +65,7 @@ var response = await client.GetAsync("http://localhost:8000/health");
             try
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                var response = await client.GetAsync("http://localhost:8000/health");
+                var response = await client.GetAsync(GetHealthUrl());
                 return (response.IsSuccessStatusCode, null);
             }
             catch (Exception ex) { return (false, ex.Message); }

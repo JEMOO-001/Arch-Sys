@@ -36,7 +36,7 @@
       </groups>
 
       <controls>
-        <button id="Sentinel_ConnectButton" caption="Connect" className="ConnectButton" loadOnClick="true" largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue32.png" smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue16.png">
+        <button id="Sentinel_ConnectButton" caption="Connect" className="ConnectButton" loadOnClick="false" largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue32.png" smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue16.png">
           <tooltip heading="Connect">Connect to Sentinel server</tooltip>
         </button>
         <button id="Sentinel_ArchiveButton" caption="Archive" className="ArchiveButton" loadOnClick="true" condition="sentinel_logged_in_state" largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue32.png" smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericButtonBlue16.png">

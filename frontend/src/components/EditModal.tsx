@@ -101,13 +101,6 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
         </div>
 
         <div>
-          <label className="text-sm font-medium text-gray-700">حالة الدراسة</label>
-          <div className="mt-1 px-3 py-2 text-sm font-semibold bg-gray-50 rounded-md border border-gray-200 text-gray-600">
-            {formData.status}
-          </div>
-        </div>
-
-        <div>
           <label className="text-sm font-medium text-gray-700">جهه الولاية</label>
           <select
             className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

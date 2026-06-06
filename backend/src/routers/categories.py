@@ -20,7 +20,7 @@ async def get_categories(
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
-    result = await db.execute(select(Category))
+    result = await db.execute(select(Category).where(Category.tenant_id == current_user.tenant_id))
     categories = result.scalars().all()
     return [
         CategoryResponse(

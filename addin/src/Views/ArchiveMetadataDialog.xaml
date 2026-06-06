@@ -6,7 +6,7 @@
         Width="540"
         WindowStartupLocation="CenterOwner"
         WindowStyle="SingleBorderWindow"
-        ResizeMode="CanResize"
+        ResizeMode="CanResize" ShowInTaskbar="False"
         MinHeight="660" MinWidth="480"
         Background="{DynamicResource Sentinel.WindowBackground}">
     <Window.Resources>
@@ -178,14 +178,18 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" x:Name="ResultText" Text="" FontSize="13" VerticalAlignment="Center"
                            Visibility="Collapsed" TextWrapping="Wrap" Margin="0,0,16,0"
                            Foreground="{DynamicResource Sentinel.TextPrimary}"/>
-                <Button Grid.Column="1" x:Name="CancelBtn" Content="Cancel" Margin="0,0,12,0"
+                <Button Grid.Column="1" x:Name="BackBtn" Content="← Back" Margin="0,0,12,0"
+                        Style="{DynamicResource SecondaryButtonStyle}" Click="BackButton_Click"
+                        Visibility="Collapsed"/>
+                <Button Grid.Column="2" x:Name="CancelBtn" Content="Cancel" Margin="0,0,12,0"
                         Style="{DynamicResource SecondaryButtonStyle}"
                         Click="CancelButton_Click"/>
-                <Button Grid.Column="2" x:Name="ArchiveBtn" Content="Archive Map"
+                <Button Grid.Column="3" x:Name="ArchiveBtn" Content="Archive Map"
                         Style="{DynamicResource PrimaryButtonStyle}"
                         Click="ArchiveButton_Click"/>
             </Grid>

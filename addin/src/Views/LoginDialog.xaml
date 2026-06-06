@@ -4,7 +4,7 @@
         Title="Sentinel - Login"
         Height="360" Width="420"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize" Topmost="True"
+        ResizeMode="NoResize" ShowInTaskbar="False"
         Background="{DynamicResource Sentinel.WindowBackground}">
     <Window.Resources>
         <ResourceDictionary>
@@ -37,20 +37,11 @@
         <TextBox Grid.Row="3" x:Name="UsernameTextBox" Style="{DynamicResource FormTextBoxStyle}" Margin="0,0,0,16"/>
 
         <TextBlock Grid.Row="4" Text="Password" Style="{DynamicResource FormLabelStyle}"/>
-        <PasswordBox Grid.Row="5" x:Name="PasswordBox" Padding="10,8" Margin="0,0,0,24"
-                     Background="{DynamicResource Sentinel.InputBackground}" Foreground="{DynamicResource Sentinel.TextPrimary}"
-                     BorderBrush="{DynamicResource Sentinel.InputBorderBrush}" BorderThickness="1">
-            <PasswordBox.Resources>
-                <Style TargetType="{x:Type Border}">
-                    <Setter Property="CornerRadius" Value="4"/>
-                </Style>
-            </PasswordBox.Resources>
-        </PasswordBox>
+        <PasswordBox Grid.Row="5" x:Name="PasswordBox" Style="{DynamicResource FormPasswordBoxStyle}" Margin="0,0,0,24"/>
 
         <DockPanel Grid.Row="7" LastChildFill="False">
-            <Button x:Name="SettingsButton" Content="⚙ Settings" Click="SettingsButton_Click"
-                    Style="{DynamicResource GhostButtonStyle}" VerticalAlignment="Center"/>
-            
+            <Button x:Name="SettingsButton" Content="Settings" Click="SettingsButton_Click"
+                    DockPanel.Dock="Left" Style="{DynamicResource SecondaryButtonStyle}"/>
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                 <Button x:Name="TestConnectionButton" Content="Test" Click="TestConnectionButton_Click"
                         Margin="0,0,8,0" Style="{DynamicResource SecondaryButtonStyle}"/>

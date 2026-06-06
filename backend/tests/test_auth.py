@@ -7,7 +7,7 @@ class TestPasswordValidation:
             UserCreate(
                 username="testuser",
                 full_name="Test User",
-                role="analyst",
+                role="edit",
                 password="short"
             )
     
@@ -16,7 +16,7 @@ class TestPasswordValidation:
             UserCreate(
                 username="testuser",
                 full_name="Test User",
-                role="analyst",
+                role="edit",
                 password="lowercase123!"
             )
     
@@ -25,7 +25,7 @@ class TestPasswordValidation:
             UserCreate(
                 username="testuser",
                 full_name="Test User",
-                role="analyst",
+                role="edit",
                 password="Password123"
             )
     
@@ -33,7 +33,7 @@ class TestPasswordValidation:
         user = UserCreate(
             username="testuser",
             full_name="Test User",
-            role="analyst",
+            role="edit",
             password="ValidPass123!"
         )
         assert user.password == "ValidPass123!"
@@ -44,7 +44,7 @@ class TestSchemaValidation:
             UserCreate(
                 username="ab",
                 full_name="Test User",
-                role="analyst",
+                role="edit",
                 password="ValidPass123!"
             )
     

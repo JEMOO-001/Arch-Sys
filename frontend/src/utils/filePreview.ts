@@ -1,4 +1,5 @@
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
+// frontend/src/utils/filePreview.ts
+import api from './api';  // reuse shared axios instance — no hardcoded IP, token in header
 
 type PreviewPayload = {
   blob: Blob;
@@ -6,20 +7,28 @@ type PreviewPayload = {
 };
 
 export const fetchPreviewBlob = async (mapId: number): Promise<PreviewPayload> => {
-  const response = await fetch(`${API_URL}/proxy/preview/${mapId}`, {
-    credentials: 'include',
+  // Authorization header is injected automatically by api.ts interceptor
+  const response = await api.get(`/proxy/raw/${mapId}`, {
+    responseType: 'blob',
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `HTTP ${response.status}`);
-  }
-
-  const contentType = response.headers.get('content-type') || 'application/pdf';
-  const blob = await response.blob();
-  return { blob, contentType };
+  const contentType = String(response.headers['content-type'] || 'application/pdf');
+  return { blob: response.data as Blob, contentType };
 };
 
-export const openInNewTab = (mapId: number) => {
-  window.open(`${API_URL}/proxy/preview/${mapId}`, '_blank');
+/**
+ * Opens a file in a new tab using a temporary object URL.
+ * The JWT token is NEVER placed in the URL — it stays in the request header only.
+ */
+export const openFilePreview = async (mapId: number): Promise<void> => {
+  try {
+    const { blob } = await fetchPreviewBlob(mapId);
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (win) {
+      win.addEventListener('unload', () => URL.revokeObjectURL(url));
+    }
+  } catch (err) {
+    console.error('Failed to open file preview:', err);
+    throw err;
+  }
 };

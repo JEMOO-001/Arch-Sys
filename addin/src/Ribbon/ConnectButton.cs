@@ -10,6 +10,11 @@ namespace ArcLayoutSentinel
     {
         protected override void OnUpdate()
         {
+            UpdateState();
+        }
+
+        private void UpdateState()
+        {
             bool isLoggedIn = FrameworkApplication.State.Contains("sentinel_logged_in_state");
 
             if (isLoggedIn)
@@ -34,6 +39,7 @@ namespace ArcLayoutSentinel
                 {
                     ConfigManager.ClearSession();
                     Module1.Current.SetLoggedInState(false);
+                    UpdateState();
                 }
                 else
                 {
@@ -44,6 +50,7 @@ namespace ArcLayoutSentinel
                     if (loginDialog.DialogResult == true)
                     {
                         Module1.Current.SetLoggedInState(true);
+                        UpdateState();
                     }
                 }
             }

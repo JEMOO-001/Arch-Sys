@@ -1,141 +1,105 @@
-# Sentinel Map Archive System
+# 🛡️ Sentinel | Layout Monitoring & Archiving System
 
-Enterprise GIS archiving tool for ArcGIS Pro with web dashboard.
+[![ArcGIS Pro](https://img.shields.io/badge/ArcGIS%20Pro-3.0%2B-blue?logo=esri&logoColor=white)](https://pro.arcgis.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-v0.100%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-v18-61DAFB?logo=react&logoColor=white)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-v5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-## Project Structure
+**Sentinel** is an enterprise-grade GIS archiving ecosystem designed for ArcGIS Pro. It bridges the gap between desktop GIS analysis and organizational oversight by providing real-time archival, version control, and a collaborative decision-making dashboard.
 
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+graph TD
+    subgraph "Desktop Environment"
+        A[ArcGIS Pro Add-in] -->|REST API| B(FastAPI Gateway)
+        A -->|PDF/JPEG| C{Network Storage}
+    end
+
+    subgraph "Server Layer"
+        B -->|SQL Queries| D[(MS SQL Server)]
+        B -->|WebSocket| E[Real-time Notification Engine]
+    end
+
+    subgraph "Web Interface"
+        F[React Dashboard] -->|Auth/Data| B
+        F -->|Live Updates| E
+        F -->|Preview| C
+    end
+
+    style A fill:#005e95,color:#fff
+    style F fill:#61dafb,color:#000
+    style B fill:#009688,color:#fff
+    style D fill:#f29111,color:#fff
 ```
-.
-├── addin/          # ArcGIS Pro add-in (C#/.NET)
-├── backend/         # FastAPI Python backend
-├── frontend/       # React TypeScript frontend
-├── database/       # SQL database scripts
-└── README.md
-```
 
-## Features
+---
 
-### ArcGIS Pro Add-in
-- Archive map layouts directly from ArcGIS Pro
-- Two-stage workflow: Create New or Edit Existing maps
-- Auto-detect Windows dark/light theme
-- Category selection from API
-- Map layout selection with preview
-- Metadata input (Income/Outcome numbers, To Whom, Status)
+## ✨ Core Capabilities
 
-### Web Dashboard
-- **Monitor View**: View all archived maps with icons
-- **Summary View**: Analytics by analyst
-- **Search & Filter**: Search by ID, Layout, Project, Status, To Whom
-- **Auto-refresh**: Automatically fetches new records every 10 seconds
-- **View/Download**: Open maps inline or download as PDF/JPEG
-- **Edit Records**: Update status, comments, and assignment info
-- **Audit Log**: Track all changes with timestamp
+### 🛠️ ArcGIS Pro Integration (Add-in)
+*   **One-Click Archiving:** Export and log layouts directly from the Pro ribbon.
+*   **Smart Identity:** Automatic MAC-based machine identification and secure JWT auth.
+*   **Dual Workflow:** Seamlessly handle **New Layouts** or **Re-versions** of existing records.
+*   **Native UI:** Fully themed WPF dialogs that respect ArcGIS Pro's light/dark modes.
 
-### Action Icons
-- Eye icon: View map in new tab
-- Download icon: Download PDF/JPEG
-- Pen icon: Edit record (only for owner/admin or original analyst)
-- Clock icon: View change history (only if changes exist)
+### 📊 Governance Dashboard (Web)
+*   **Real-time Collaboration:** Live chat and notifications via WebSockets.
+*   **Deep Linking:** Persistent URLs for specific reviews (`/approval/:id`).
+*   **Audit Trails:** Exhaustive history tracking for every metadata change.
+*   **Media Preview:** High-performance inline PDF/Image viewer with proxy security.
 
-### Audit Logging
-- Records all field changes (status, comment, income_num, outcome_num, to_whom)
-- Shows combined changes in single entry with newlines
-- Displays user-friendly format: "field: old -> new"
-- Timestamps in Cairo timezone (UTC+3)
+### 🛡️ Enterprise Security
+*   **Role-Based Access (RBAC):** Distinct permissions for Analysts and Administrators.
+*   **Data Integrity:** Unique ID generation (`AB-0000`) and SQL Server ACID compliance.
 
-## Tech Stack
+---
 
-- **Backend**: FastAPI + SQLAlchemy + MS SQL Server
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **Add-in**: ArcGIS Pro SDK for .NET
-- **Database**: MS SQL Server
+## 🚀 Quick Start
 
-## Getting Started
-
-### Backend
+### 1. Backend (FastAPI)
 ```bash
 cd backend
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn src.main:app --reload
+uvicorn src.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Frontend
+### 2. Frontend (React)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### Add-in
-```bash
-cd addin
-dotnet build -c Release
-```
+### 3. Add-in (C#/.NET)
+Open `GIS Archiving Sys.sln` in Visual Studio and build the `ArcLayoutSentinel` project. The `.esriAddInX` file will be generated in the `bin` folder.
 
-The add-in will be built to `addin/bin/Release/ArcLayoutSentinel.esriAddInX`
+---
 
-## API Endpoints
+## 📂 Repository Structure
 
-### Authentication
-- `POST /auth/login` - User login (returns JWT token)
+*   📂 `addin/` — ArcGIS Pro Desktop Extension (C# SDK).
+*   📂 `backend/` — REST API & WebSocket Server (Python/FastAPI).
+*   📂 `frontend/` — Collaborative Management Dashboard (React/TS).
+*   📂 `database/` — SQL Server Schema and Migrations.
 
-### Maps
-- `GET /maps/` - List all archived maps
-- `POST /maps/` - Archive a new map
-- `GET /maps/{id}` - Get single map
-- `PATCH /maps/{id}` - Update map record
-- `GET /maps/next-id` - Generate next unique ID
-- `PUT /maps/{id}/reexport` - Re-export map file
+---
 
-### Audit
-- `GET /maps/{id}/audit` - Get audit log for map
-- `POST /maps/audit/batch` - Check which maps have audit logs
+## 🛠️ Tech Stack
 
-### Categories
-- `GET /categories/` - List categories
+| Layer | Technologies |
+| :--- | :--- |
+| **Desktop** | .NET 6, ArcGIS Pro SDK, WPF, XAML |
+| **Backend** | Python 3.10+, FastAPI, SQLAlchemy, MS SQL Server |
+| **Frontend** | React 18, Vite, TailwindCSS, Framer Motion, Lucide |
+| **Real-time** | WebSockets, JWT Authentication |
 
-### Stats
-- `GET /stats/summary` - Dashboard statistics
-- `GET /stats/analysts` - Analyst performance
+---
 
-### Proxy
-- `GET /proxy/file/{id}` - View/Download files
-
-### Users
-- `GET /users/me` - Get current user info
-- `GET /users/` - List all users (admin only)
-
-## User Roles
-
-- **Owner/Admin**: Full access (View, Edit, Delete all records)
-- **Analyst**: View all records, Edit only own records
-
-## Environment Variables
-
-### Backend (.env)
-```
-DATABASE_URL=mssql+pyodbc://user:pass@server/database?driver=ODBC+Driver+17+for+SQL+Server
-SECRET_KEY=your-secret-key
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=480
-ARCHIVE_ROOT_PATH=\\server\share
-```
-
-## Archive Workflow
-
-1. Open ArcGIS Pro
-2. Run ArcLayoutSentinel add-in
-3. Choose "Create New" or "Edit Existing"
-4. Select category and map layout
-5. Fill metadata (Income/Outcome numbers, To Whom)
-6. Save - Map is archived with unique ID
-
-## Database Schema
-
-### Tables
-- **Users**: System users
-- **Maps**: Archived maps
-- **Audit_Log**: Change history
-- **Categories**: Map categories
-- **Projects**: Project references
+<p align="center">
+  <i>Developed for Enterprise GIS Workflows | 2026</i>
+</p>

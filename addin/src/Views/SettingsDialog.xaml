@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Sentinel Settings"
         Height="340" Width="480"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         WindowStyle="SingleBorderWindow" ResizeMode="NoResize"
         Background="{DynamicResource Sentinel.WindowBackground}">
     <Window.Resources>
@@ -32,8 +32,8 @@
         <StackPanel Grid.Row="1" Margin="24,24">
             <StackPanel Margin="0,0,0,20">
                 <TextBlock Text="API Server URL" Style="{DynamicResource FormLabelStyle}"/>
-                <TextBox x:Name="BaseUrlTextBox" Style="{DynamicResource FormTextBoxStyle}"/>
-                <TextBlock Text="e.g. http://localhost:8000/api/v1" FontSize="12" Foreground="{DynamicResource Sentinel.TextMuted}" Margin="0,6,0,0"/>
+                <TextBox x:Name="BaseUrlTextBox" Style="{DynamicResource FormTextBoxStyle}" IsReadOnly="False"/>
+                <TextBlock Text="e.g. http://172.20.0.149:8000/api/v1" FontSize="11" Foreground="{DynamicResource Sentinel.TextMuted}" Margin="0,4,0,0"/>
             </StackPanel>
             <StackPanel Margin="0,0,0,20">
                 <TextBlock Text="Archive Root Path (UNC)" Style="{DynamicResource FormLabelStyle}"/>

@@ -3,7 +3,7 @@ import { Clock, X } from 'lucide-react';
 import { Modal } from './Modal';
 import axios from 'axios';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + '/api/v1';
 
 interface MapRecord {
   map_id: number;
@@ -13,7 +13,7 @@ interface MapRecord {
 interface AuditEntry {
   id: number;
   action: string;
-  changed_by: number;
+  changed_by: string;
   changed_at: string;
 }
 
@@ -59,9 +59,14 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, r
             {auditLog.map(entry => (
               <div key={entry.id} className="border-b pb-3 last:border-b-0">
                 <p className="text-sm text-gray-800 whitespace-pre-line">{entry.action}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {entry.changed_at ? new Date(entry.changed_at).toLocaleString() : 'Unknown date'}
-                </p>
+                <div className="flex justify-between items-center mt-1">
+                  <p className="text-xs text-gray-500 font-medium">
+                    By: {entry.changed_by}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {entry.changed_at ? new Date(entry.changed_at).toLocaleString() : 'Unknown date'}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
