@@ -11,7 +11,6 @@ interface FileViewerProps {
 }
 
 import api from '../utils/api';
-const API_URL = (import.meta.env.VITE_API_URL || '') + '/api/v1';
 
 const b64ToBlob = (b64: string, contentType: string) => {
   const byteCharacters = atob(b64);
@@ -49,19 +48,9 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
     setError(null);
     
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/proxy/preview/${mapId}`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await api.get(`/proxy/preview/${mapId}`);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP ${response.status}`);
-      }
-      
-      const payload = await response.json();
+      const payload = response.data;
       const contentType = payload.media_type || 'application/pdf';
       const isImage = String(contentType).includes('image/');
       

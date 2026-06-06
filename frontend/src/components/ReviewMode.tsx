@@ -6,6 +6,9 @@ import {
   Eye, EyeOff, Loader, FileText
 } from 'lucide-react';
 import { Button } from './Button';
+import api from '../utils/api';
+import { API_BASE } from '../config';
+import { openAttachment } from '../utils/openAttachment';
 
 interface MapRecord {
   map_id: number;
@@ -35,8 +38,6 @@ interface ReviewModeProps {
   onPostComment: (map_id: number, message: string, file?: File) => Promise<void>;
   onUpdateApproval: (map_id: number, status: string, comment: string) => Promise<void>;
 }
-
-const API_URL = (import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + '/api/v1';
 
 const b64ToBlob = (b64: string, contentType: string) => {
   const byteCharacters = atob(b64);
@@ -138,19 +139,9 @@ export const ReviewMode: React.FC<ReviewModeProps> = ({
     setLoadingPreview(true);
     setPreviewError(null);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/proxy/preview/${record.map_id}`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await api.get(`/proxy/preview/${record.map_id}`);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP ${response.status}`);
-      }
-      
-      const payload = await response.json();
+      const payload = response.data;
       const contentType = payload.media_type || 'application/pdf';
       const isImage = String(contentType).includes('image/');
       
@@ -525,10 +516,10 @@ export const ReviewMode: React.FC<ReviewModeProps> = ({
                               {c.attachment_path && (
                                 <div className="mt-2 rounded-lg overflow-hidden border border-gray-100 max-w-sm">
                                   <img 
-                                    src={(import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + c.attachment_path} 
+                                    src={API_BASE + c.attachment_path} 
                                     alt="attachment" 
                                     className="w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
-                                    onClick={() => window.open((import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + c.attachment_path, '_blank')}
+                                    onClick={() => openAttachment(c.attachment_path)}
                                   />
                                 </div>
                               )}

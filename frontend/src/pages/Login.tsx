@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../config';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Login: React.FC = () => {
@@ -14,8 +15,7 @@ export const Login: React.FC = () => {
   useEffect(() => {
     const checkServer = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000';
-        const res = await fetch(`${apiBase}/health`);
+        const res = await fetch(`${API_BASE}/health`);
         setServerOnline(res.ok);
       } catch {
         setServerOnline(false);

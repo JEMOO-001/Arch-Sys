@@ -17,7 +17,7 @@ namespace ArcLayoutSentinel.Services
             }
             catch
             {
-                return "http://172.20.0.149:8000/health";
+                return "http://localhost:8000/health";
             }
         }
 

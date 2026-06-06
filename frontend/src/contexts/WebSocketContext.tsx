@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
+import { API_BASE } from '../config';
 
 interface WebSocketContextType {
   lastMessage: any;
@@ -24,7 +25,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     const getWsUrl = () => {
-      const apiEndpoint = import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000';
+      const apiEndpoint = API_BASE;
       const wsProtocol = apiEndpoint.startsWith('https') ? 'wss:' : 'ws:';
       const host = apiEndpoint.replace(/^https?:\/\//, '');
       return `${wsProtocol}//${host}/api/v1/ws?token=${encodeURIComponent(token)}`;

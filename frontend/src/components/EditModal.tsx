@@ -74,8 +74,6 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, onClose, record, o
       to_whom: formData.to_whom || '',
     };
     
-    console.log('EditModal submitting:', updatedRecord);
-    
     // Pass data directly to onSave (not through state)
     onSave(updatedRecord);
     

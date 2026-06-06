@@ -23,7 +23,7 @@ export const openFilePreview = async (mapId: number): Promise<void> => {
   try {
     const { blob } = await fetchPreviewBlob(mapId);
     const url = URL.createObjectURL(blob);
-    const win = window.open(url, '_blank');
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
     if (win) {
       win.addEventListener('unload', () => URL.revokeObjectURL(url));
     }

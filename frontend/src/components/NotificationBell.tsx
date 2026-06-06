@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Check, MessageSquare, AlertCircle, CheckCircle, Clock } from 'lucide-react';
-import axios from 'axios';
+import api from '../utils/api';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const API_URL = (import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + '/api/v1';
 
 interface Notification {
   id: number;
@@ -31,15 +29,13 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
   const fetchNotifications = async () => {
     if (!token) return;
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      
       // Auto-read notifications in parallel/background to avoid serial network blocking
       if (currentlyViewingMapId) {
-        axios.patch(`${API_URL}/notifications/read-map/${currentlyViewingMapId}`, {}, { headers })
+        api.patch(`/notifications/read-map/${currentlyViewingMapId}`, {})
           .catch(err => console.error('Failed to auto-read notifications:', err));
       }
 
-      const res = await axios.get(`${API_URL}/notifications/`, { headers });
+      const res = await api.get('/notifications/');
       setNotifications(res.data || []);
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
@@ -54,8 +50,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
     if (lastMessage && lastMessage.type === 'NOTIFICATION') {
       // If message is for currently viewing map, mark it as read and then fetch immediately
       if (currentlyViewingMapId && lastMessage.data.map_id === currentlyViewingMapId) {
-        const headers = { Authorization: `Bearer ${token}` };
-        axios.patch(`${API_URL}/notifications/read-map/${currentlyViewingMapId}`, {}, { headers })
+        api.patch(`/notifications/read-map/${currentlyViewingMapId}`, {})
           .then(() => fetchNotifications())
           .catch(() => fetchNotifications());
       } else {
@@ -76,8 +71,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
 
   const markAsRead = async (id: number) => {
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      await axios.patch(`${API_URL}/notifications/${id}/read`, {}, { headers });
+      await api.patch(`/notifications/${id}/read`, {});
       setNotifications(prev => prev.filter(n => n.id !== id));
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
@@ -86,8 +80,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigate, 
 
   const markAllAsRead = async () => {
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      await axios.patch(`${API_URL}/notifications/read-all`, {}, { headers });
+      await api.patch('/notifications/read-all', {});
       setNotifications([]);
     } catch (err) {
       console.error('Failed to mark all as read:', err);

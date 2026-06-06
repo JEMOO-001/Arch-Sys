@@ -2,9 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Bot, X, Send, Sparkles, Maximize2, Database, BrainCircuit, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-
-const API_URL = (import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + '/api/v1';
+import api from '../utils/api';
 
 interface ChatMessage {
   id: string;
@@ -247,16 +245,9 @@ export const ChatBot: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      const { data } = await axios.post(
-        `${API_URL}/chat`,
-        { message: text.trim() },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
+      const { data } = await api.post(
+        '/chat',
+        { message: text.trim() }
       );
 
       const botMsg: ChatMessage = {

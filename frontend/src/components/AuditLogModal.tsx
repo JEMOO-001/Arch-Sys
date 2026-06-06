@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, X } from 'lucide-react';
 import { Modal } from './Modal';
-import axios from 'axios';
-
-const API_URL = (import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + '/api/v1';
+import api from '../utils/api';
 
 interface MapRecord {
   map_id: number;
@@ -27,13 +25,10 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, r
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  const token = localStorage.getItem('token');
-  
   useEffect(() => {
-    if (isOpen && record && token) {
+    if (isOpen && record) {
       setIsLoading(true);
-      const headers = { Authorization: `Bearer ${token}` };
-      axios.get(`${API_URL}/maps/${record.map_id}/audit`, { headers })
+      api.get(`/maps/${record.map_id}/audit`)
         .then(res => {
           setAuditLog(res.data || []);
         })
@@ -45,7 +40,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, r
           setIsLoading(false);
         });
     }
-  }, [isOpen, record, token]);
+  }, [isOpen, record]);
   
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Audit Log: ${record?.unique_id || ''}`}>

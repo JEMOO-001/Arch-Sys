@@ -5,11 +5,9 @@ import {
   ArrowLeft, History, MessageSquare, Check, AlertCircle, Bot, Database 
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { useAuth } from '../contexts/AuthContext';
+import api from '../utils/api';
 import { MarkdownRenderer } from '../components/ChatBot';
-
-const API_URL = (import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + '/api/v1';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ChatMessage {
   id: string;
@@ -179,16 +177,9 @@ export const ChatPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      const { data } = await axios.post(
-        `${API_URL}/chat`,
-        { message: text.trim() },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
+      const { data } = await api.post(
+        '/chat',
+        { message: text.trim() }
       );
 
       const botMsg: ChatMessage = {

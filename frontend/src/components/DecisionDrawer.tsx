@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, MessageSquare, Clock, Send, ShieldCheck, Paperclip } from 'lucide-react';
 import { Button } from './Button';
+import { API_BASE } from '../config';
+import { openAttachment } from '../utils/openAttachment';
 
 interface MapRecord {
   map_id: number;
@@ -271,10 +273,10 @@ export const DecisionDrawer: React.FC<DecisionDrawerProps> = ({
                                 {c.attachment_path && (
                                   <div className="mt-2 rounded-lg overflow-hidden border border-white/20">
                                     <img 
-                                      src={(import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + c.attachment_path} 
+                                      src={API_BASE + c.attachment_path} 
                                       alt="attachment" 
                                       className="w-full h-auto cursor-pointer hover:opacity-90"
-                                      onClick={() => window.open((import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + c.attachment_path, '_blank')}
+                                      onClick={() => openAttachment(c.attachment_path)}
                                     />
                                   </div>
                                 )}

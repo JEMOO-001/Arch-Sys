@@ -15,9 +15,8 @@ import { ChatBot } from '../components/ChatBot';
 import { ReviewMode } from '../components/ReviewMode';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import axios from 'axios';
-
-const API_URL = (import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + '/api/v1';
+import api from '../utils/api';
+import { API_BASE, API_URL } from '../config';
 
 const b64ToBlob = (b64: string, contentType: string) => {
   const byteCharacters = atob(b64);
@@ -73,7 +72,7 @@ interface MapComment {
 }
 
 export const Dashboard: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const navigate = useNavigate();
   const handleLogoClick = () => {
     const event = new CustomEvent('toggle-sentinel-chatbot');
@@ -122,8 +121,6 @@ export const Dashboard: React.FC = () => {
   const [selectedMap, setSelectedMap] = useState<MapRecord | null>(null);
   const [detailComments, setDetailComments] = useState<MapComment[]>([]);
   const [loadingDetailComments, setLoadingDetailComments] = useState(false);
-
-  const token = localStorage.getItem('token');
   const isAdmin = user?.role === 'admin';
 
   // Hook must be called at the top level of the component
@@ -200,11 +197,9 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const headers = { Authorization: `Bearer ${token}` };
-        
         const [statsRes, mapsRes] = await Promise.all([
-          axios.get(`${API_URL}/stats/summary`, { headers }),
-          axios.get(`${API_URL}/maps/`, { headers })
+          api.get('/stats/summary'),
+          api.get('/maps/')
         ]);
         
         setStats(statsRes.data);
@@ -233,7 +228,7 @@ export const Dashboard: React.FC = () => {
         const mapIds = mapsRes.data.map((m: MapRecord) => m.map_id);
         if (mapIds.length > 0) {
           try {
-            const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers });
+            const auditBatchRes = await api.post('/maps/audit/batch', mapIds);
             const auditIds = new Set<number>((auditBatchRes.data.maps_with_audit || []).map((id: number) => id));
             setAuditMapIds(auditIds);
           } catch (err) {
@@ -242,7 +237,7 @@ export const Dashboard: React.FC = () => {
         }
         
         if (isAdmin) {
-          const analystsRes = await axios.get(`${API_URL}/stats/analysts`, { headers });
+          const analystsRes = await api.get('/stats/analysts');
           setAnalysts(analystsRes.data);
         }
       } catch (err) {
@@ -257,14 +252,13 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!token) return;
     const interval = setInterval(() => {
-      const headers = { Authorization: `Bearer ${token}` };
-      axios.get(`${API_URL}/maps/`, { headers })
+      api.get('/maps/')
         .then(res => {
           if (res.data && Array.isArray(res.data)) {
             setMaps(res.data);
             const mapIds = res.data.map((m: MapRecord) => m.map_id);
             if (mapIds.length > 0) {
-              axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers })
+              api.post('/maps/audit/batch', mapIds)
                 .then(auditRes => {
                   const auditIds = new Set<number>((auditRes.data.maps_with_audit || []).map((id: number) => id));
                   setAuditMapIds(auditIds);
@@ -278,11 +272,9 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [token]);
 
-const handleSearch = async () => {
+  const handleSearch = async () => {
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const res = await axios.get(`${API_URL}/maps/`, { 
-        headers,
+      const res = await api.get('/maps/', { 
         params: { 
           search: search || undefined,
           search_field: searchField || 'all'
@@ -296,101 +288,36 @@ const handleSearch = async () => {
 
   const handleViewNewTab = async (record: MapRecord) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/proxy/preview/${record.map_id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const payload = await response.json();
+      const response = await api.get(`/proxy/preview/${record.map_id}`);
+      const payload = response.data;
       const contentType = payload.media_type || 'application/pdf';
       const isImage = String(contentType).includes('image/');
 
-      const tab = window.open('', '_blank');
-      if (!tab) return;
-
-      const title = record.unique_id ? `Preview: ${record.unique_id}` : 'Preview';
-      let url: string;
+      let objectUrl: string;
       if (isImage) {
-        url = `data:${contentType};base64,${payload.data_base64}`;
+        objectUrl = `data:${contentType};base64,${payload.data_base64}`;
       } else {
         const blob = b64ToBlob(payload.data_base64, contentType);
-        url = window.URL.createObjectURL(blob);
+        objectUrl = window.URL.createObjectURL(blob);
       }
 
-      tab.document.write(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
-    body { background: #111827; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    .error { color: #f87171; padding: 24px; text-align: center; font-size: 14px; }
-    img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
-    iframe { width: 100vw; height: 100vh; border: 0; }
-  </style>
-</head>
-<body>
-  ${isImage
-    ? `<img src="${url}" alt="preview" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load image. The file may be corrupted or unsupported.</div>'" />`
-    : `<iframe src="${url}" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load PDF. The file may be corrupted or unsupported.</div>'"></iframe>`
-  }
-  <script>
-    (function() {
-      var blobUrl = '${url}';
-      window.addEventListener('beforeunload', function() {
-        if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
-      });
-    })();
-  </script>
-</body>
-</html>`);
-      tab.document.close();
-    } catch (err) {
-      const errTab = window.open('', '_blank');
-      if (errTab) {
-        errTab.document.write(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Preview Error</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; background: #111827; color: #f87171; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-    .error-box { text-align: center; }
-    .error-box h2 { margin-bottom: 8px; font-size: 18px; }
-    .error-box p { font-size: 14px; opacity: 0.8; }
-  </style>
-</head>
-<body>
-  <div class="error-box">
-    <h2>Failed to load preview</h2>
-    <p>${err instanceof Error ? err.message : 'Unknown error occurred'}</p>
-  </div>
-</body>
-</html>`);
-        errTab.document.close();
+      const win = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      if (win && !isImage) {
+        win.addEventListener('unload', () => window.URL.revokeObjectURL(objectUrl));
       }
+    } catch (err) {
+      console.error('Failed to open preview in new tab:', err);
     }
   };
 
   const handleDownload = async (record: MapRecord) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/proxy/file/${record.map_id}?mode=attachment`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await api.get(`/proxy/file/${record.map_id}?mode=attachment`, {
+        responseType: 'blob'
       });
       
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Failed to download');
-      }
-      
-      const contentType = response.headers.get('content-type') || 'application/pdf';
-      const blob = await response.blob();
+      const blob = response.data;
+      const contentType = String(response.headers['content-type'] || 'application/pdf');
       const ext = contentType.includes('jpeg') || contentType.includes('image') ? 'jpeg' : 'pdf';
       
       const url = window.URL.createObjectURL(blob);
@@ -407,7 +334,6 @@ const handleSearch = async () => {
       alert('Download failed. Please try Preview instead.');
     }
   };
-
   const handleEdit = (record: MapRecord) => {
     setEditRecord(record);
     setEditRecordForModal(record);
@@ -427,8 +353,7 @@ const handleSearch = async () => {
   const loadMapComments = async (mapId: number, showLoader = true) => {
     try {
       if (showLoader) setLoadingDetailComments(true);
-      const headers = { Authorization: `Bearer ${token}` };
-      const res = await axios.get(`${API_URL}/maps/${mapId}/comments`, { headers });
+      const res = await api.get(`/maps/${mapId}/comments`);
       setDetailComments(res.data || []);
     } catch (err) {
       console.error('Failed to load comments:', err);
@@ -440,15 +365,15 @@ const handleSearch = async () => {
 
   const postMapComment = async (mapId: number, message: string, file?: File) => {
     try {
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data'
-      };
       const formData = new FormData();
       formData.append('message', message);
       if (file) formData.append('file', file);
 
-      await axios.post(`${API_URL}/maps/${mapId}/comments`, formData, { headers });
+      await api.post(`/maps/${mapId}/comments`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
       // Refresh comments in background to avoid resetting scroll
       await loadMapComments(mapId, false);
     } catch (err) {
@@ -457,13 +382,12 @@ const handleSearch = async () => {
     }
   };
   const updateApproval = async (mapId: number, approvalStatus: string, approvalComment: string) => {
-    const headers = { Authorization: `Bearer ${token}` };
-    await axios.patch(`${API_URL}/maps/${mapId}/approval`, {
+    await api.patch(`/maps/${mapId}/approval`, {
       approval_status: approvalStatus,
       approval_comment: approvalComment || null,
-    }, { headers });
+    });
 
-    const mapsRes = await axios.get(`${API_URL}/maps/`, { headers });
+    const mapsRes = await api.get('/maps/');
     setMaps(mapsRes.data);
     if (detailRecord) {
       const updated = mapsRes.data.find((m: MapRecord) => m.map_id === detailRecord.map_id) || null;
@@ -472,7 +396,6 @@ const handleSearch = async () => {
   };
   
   const handleRecordChange = (updated: MapRecord | null) => {
-    console.log('Record changed:', updated);
     setEditRecordForModal(updated);
   };
 
@@ -480,28 +403,26 @@ const handleSearch = async () => {
     const record = updatedRecord || editRecordForModal;
     if (!record) return;
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      
-      const res = await axios.patch(`${API_URL}/maps/${record.map_id}`, {
+      await api.patch(`/maps/${record.map_id}`, {
         comment: record.comment,
         income_num: record.income_num,
         outcome_num: record.outcome_num,
         to_whom: record.to_whom,
-      }, { headers });
+      });
       
       setEditOpen(false);
       
       setSearch('');
-      const mapsRes = await axios.get(`${API_URL}/maps/`, { headers });
+      const mapsRes = await api.get('/maps/');
       setMaps(mapsRes.data);
       
-      const statsRes = await axios.get(`${API_URL}/stats/summary`, { headers });
+      const statsRes = await api.get('/stats/summary');
       setStats(statsRes.data);
 
       const mapIds = mapsRes.data.map((m: MapRecord) => m.map_id);
       if (mapIds.length > 0) {
         try {
-          const auditBatchRes = await axios.post(`${API_URL}/maps/audit/batch`, mapIds, { headers });
+          const auditBatchRes = await api.post('/maps/audit/batch', mapIds);
           const auditIds = new Set<number>((auditBatchRes.data.maps_with_audit || []).map((id: number) => id));
           setAuditMapIds(auditIds);
         } catch { }

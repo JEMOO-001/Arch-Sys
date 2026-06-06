@@ -1,13 +1,5 @@
-// frontend/src/utils/api.ts
 import axios from 'axios';
-
-const rawBaseUrl = import.meta.env.VITE_API_URL?.trim();
-
-if (!rawBaseUrl) {
-  throw new Error('VITE_API_URL is required');
-}
-
-export const API_URL = `${rawBaseUrl.replace(/\/$/, '')}/api/v1`;
+import { API_URL } from '../config';
 
 const api = axios.create({
   baseURL: API_URL,
