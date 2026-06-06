@@ -6,6 +6,7 @@ from typing import List, Optional
 import logging
 import os
 import uuid
+import aiofiles
 from datetime import datetime, timedelta, timezone
 from ..core.config import settings
 
@@ -511,18 +512,18 @@ async def create_map_comment(
         }, target_id)
 
     # Broadcast message to anyone viewing this map
-    await manager.broadcast({
-        "type": "CHAT_MESSAGE",
-        "data": {
-            "comment_id": db_comment.comment_id,
-            "map_id": db_comment.map_id,
-            "user_id": db_comment.user_id,
-            "username": username,
-            "message": db_comment.message,
-            "attachment_path": attachment_path,
-            "created_at": db_comment.created_at.isoformat()
-        }
-    })
+    await manager.broadcast_to_tenant({
+    "type": "CHAT_MESSAGE",
+    "data": {
+        "comment_id": db_comment.comment_id,
+        "map_id": db_comment.map_id,
+        "user_id": db_comment.user_id,
+        "username": username,
+        "message": db_comment.message,
+        "attachment_path": attachment_path,
+        "created_at": db_comment.created_at.isoformat()
+    }
+}, current_user.tenant_id)
 
     return {
         "comment_id": db_comment.comment_id,

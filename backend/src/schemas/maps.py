@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional
 from datetime import datetime
 import re
@@ -92,6 +92,14 @@ class MapResponse(MapBase):
 class MapApprovalUpdate(BaseModel):
     approval_status:  str           = Field(..., pattern=_APPROVAL_PATTERN)
     approval_comment: Optional[str] = Field(None, max_length=1000)
+
+    @model_validator(mode="after")
+    def check_comment_required(self) -> "MapApprovalUpdate":
+        status_val = self.approval_status
+        comment_val = self.approval_comment or ""
+        if status_val in ["Editing Required", "On Hold"] and not comment_val.strip():
+            raise ValueError("Comment is required for Editing Required or On Hold decisions")
+        return self
 
 
 class MapCommentCreate(BaseModel):

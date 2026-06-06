@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Database, LogOut, LayoutGrid, BarChart3, Clock, MessageSquare } from 'lucide-react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { MapTable } from '../components/MapTable';
@@ -83,6 +83,23 @@ export const Dashboard: React.FC = () => {
   const location = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setIsSidebarOpen(false);
+      } else {
+        setIsSidebarOpen(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const [currentView, setCurrentView] = useState<'monitor' | 'summary' | 'review'>('monitor');
   const [stats, setStats] = useState<Stats>({ total: 0, inProgress: 0, complete: 0 });
   const [analysts, setAnalysts] = useState<Analyst[]>([]);
@@ -113,7 +130,9 @@ export const Dashboard: React.FC = () => {
   const { lastMessage } = useWebSocket();
 
   useEffect(() => {
-    if (lastMessage && lastMessage.type === 'CHAT_MESSAGE') {
+    if (!lastMessage) return;
+
+    if (lastMessage.type === 'CHAT_MESSAGE') {
       const msg = lastMessage.data;
       const isViewingMap = (detailRecord && msg.map_id === detailRecord.map_id) || 
                           (selectedMap && msg.map_id === selectedMap.map_id);
@@ -124,6 +143,51 @@ export const Dashboard: React.FC = () => {
           if (prev.find(c => c.comment_id === msg.comment_id)) return prev;
           return [...prev, msg];
         });
+      }
+    }
+
+    if (lastMessage.type === 'MAP_STATUS_UPDATE') {
+      const updateData = lastMessage.data;
+      
+      // Update maps list
+      setMaps(prevMaps => prevMaps.map(m => 
+        m.map_id === updateData.map_id 
+          ? { 
+              ...m, 
+              status: updateData.status, 
+              approval_status: updateData.approval_status, 
+              approval_comment: updateData.approval_comment,
+              approved_by: updateData.approved_by,
+              approved_at: updateData.approved_at,
+              updated_at: updateData.updated_at
+            } 
+          : m
+      ));
+      
+      // Update selectedMap if currently viewing/reviewing it
+      if (selectedMap && selectedMap.map_id === updateData.map_id) {
+        setSelectedMap(prev => prev ? {
+          ...prev,
+          status: updateData.status,
+          approval_status: updateData.approval_status,
+          approval_comment: updateData.approval_comment,
+          approved_by: updateData.approved_by,
+          approved_at: updateData.approved_at,
+          updated_at: updateData.updated_at
+        } : null);
+      }
+
+      // Update detailRecord if currently viewing details
+      if (detailRecord && detailRecord.map_id === updateData.map_id) {
+        setDetailRecord(prev => prev ? {
+          ...prev,
+          status: updateData.status,
+          approval_status: updateData.approval_status,
+          approval_comment: updateData.approval_comment,
+          approved_by: updateData.approved_by,
+          approved_at: updateData.approved_at,
+          updated_at: updateData.updated_at
+        } : null);
       }
     }
   }, [lastMessage, detailRecord, selectedMap]);
@@ -470,21 +534,42 @@ const handleSearch = async () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 overflow-hidden relative">
+      {/* Sidebar Backdrop on Mobile */}
+      <AnimatePresence>
+        {isMobile && isSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm"
+          />
+        )}
+      </AnimatePresence>
+
       <motion.aside 
         initial={false}
-        animate={{ width: isSidebarOpen ? 260 : 80 }}
-        className="flex flex-col border-r border-gray-200 bg-white shadow-sm"
+        animate={{ 
+          width: isMobile 
+            ? (isSidebarOpen ? 260 : 0) 
+            : (isSidebarOpen ? 260 : 80),
+          x: isMobile && !isSidebarOpen ? -260 : 0
+        }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className={`flex flex-col border-r border-gray-200 bg-white shadow-sm shrink-0 ${
+          isMobile ? 'fixed inset-y-0 left-0 z-40' : 'relative'
+        } ${isMobile && !isSidebarOpen ? 'pointer-events-none border-none' : ''}`}
       >
         <div 
           onClick={handleLogoClick}
           className={`flex h-16 items-center border-b border-gray-200 cursor-pointer hover:bg-slate-50 transition-colors select-none group ${
-            isSidebarOpen ? 'px-6 justify-start' : 'justify-center'
+            isSidebarOpen || isMobile ? 'px-6 justify-start' : 'justify-center'
           }`}
           title="Toggle AI Assistant"
         >
           <Database className="h-8 w-8 text-blue-600 shrink-0 transition-transform group-hover:scale-108 duration-200" />
-          {isSidebarOpen && (
+          {(isSidebarOpen || isMobile) && (
             <span className="ml-3 font-bold text-gray-900 tracking-tight text-xl group-hover:text-blue-600 transition-colors duration-200">
               Sentinel
             </span>
@@ -496,24 +581,33 @@ const handleSearch = async () => {
             icon={LayoutGrid} 
             label="Monitor" 
             active={currentView === 'monitor'} 
-            isOpen={isSidebarOpen}
-            onClick={() => setCurrentView('monitor')}
+            isOpen={isSidebarOpen || isMobile}
+            onClick={() => {
+              setCurrentView('monitor');
+              if (isMobile) setIsSidebarOpen(false);
+            }}
           />
           {isAdmin && (
             <NavItem 
               icon={BarChart3} 
               label="Summary" 
               active={currentView === 'summary'} 
-              isOpen={isSidebarOpen}
-              onClick={() => setCurrentView('summary')}
+              isOpen={isSidebarOpen || isMobile}
+              onClick={() => {
+                setCurrentView('summary');
+                if (isMobile) setIsSidebarOpen(false);
+              }}
             />
           )}
           <NavItem 
             icon={MessageSquare} 
             label="AI Chat" 
             active={false} 
-            isOpen={isSidebarOpen}
-            onClick={() => navigate('/chat')}
+            isOpen={isSidebarOpen || isMobile}
+            onClick={() => {
+              navigate('/chat');
+              if (isMobile) setIsSidebarOpen(false);
+            }}
           />
         </nav>
 
@@ -521,11 +615,11 @@ const handleSearch = async () => {
           <button 
             onClick={logout}
             className={`flex w-full items-center rounded-lg py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors ${
-              isSidebarOpen ? 'px-3 justify-start' : 'justify-center'
+              isSidebarOpen || isMobile ? 'px-3 justify-start' : 'justify-center'
             }`}
           >
             <LogOut className="h-5 w-5 shrink-0" />
-            {isSidebarOpen && <span className="ml-3 truncate">Logout</span>}
+            {(isSidebarOpen || isMobile) && <span className="ml-3 truncate">Logout</span>}
           </button>
         </div>
       </motion.aside>
@@ -588,7 +682,7 @@ const handleSearch = async () => {
                       </motion.div>
                     )}
                   </div>
-                  <div className="flex gap-2 md:gap-4 w-full md:w-auto">
+                  <div className="flex flex-wrap gap-2 md:gap-4 w-full md:w-auto">
                       <select
                         className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         value={searchField}

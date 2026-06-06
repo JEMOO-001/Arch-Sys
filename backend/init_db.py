@@ -15,6 +15,14 @@ from sqlalchemy import text
 from src.core.config import settings
 from src.dependencies.auth import get_password_hash
 
+def _require_seed_password(env_var: str) -> str:
+    """Abort seeding if a required seed password is not set via environment variable."""
+    raise SystemExit(
+        f"\n[init_db] ERROR: Set {env_var} environment variable before seeding.\n"
+        f"  Example: set {env_var}=YourStrongPassword && python init_db.py\n"
+    )
+
+
 async def init_database():
     """Initialize database with tables and seed data."""
     # Create async engine
@@ -210,7 +218,7 @@ async def init_database():
 
         # Seed admin user
         print("\nSeeding admin user...")
-        admin_password = "admin123"
+        admin_password = os.environ.get("SEED_ADMIN_PASSWORD") or _require_seed_password("SEED_ADMIN_PASSWORD")
         admin_hash = get_password_hash(admin_password)
 
         await conn.execute(text("""
@@ -223,7 +231,7 @@ async def init_database():
         print(f"     Password: {admin_password}")
 
         # Seed test edit user
-        edit_password = "edit123"
+        edit_password = os.environ.get("SEED_EDIT_PASSWORD") or _require_seed_password("SEED_EDIT_PASSWORD")
         edit_hash = get_password_hash(edit_password)
 
         await conn.execute(text("""

@@ -27,18 +27,18 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const apiEndpoint = import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000';
       const wsProtocol = apiEndpoint.startsWith('https') ? 'wss:' : 'ws:';
       const host = apiEndpoint.replace(/^https?:\/\//, '');
-      return `${wsProtocol}//${host}/api/v1/ws/${token}`;
+      return `${wsProtocol}//${host}/api/v1/ws?token=${encodeURIComponent(token)}`;
     };
     const wsUrl = getWsUrl();
     
     let reconnectTimeout: any;
 
     const connect = () => {
-      console.log('Attempting to connect to WebSocket...');
+      
       const socket = new WebSocket(wsUrl);
       
       socket.onopen = () => {
-        console.log('Connected to WebSocket');
+        
         setIsConnected(true);
       };
 
@@ -47,13 +47,13 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           const data = JSON.parse(event.data);
           setLastMessage(data);
         } catch (err) {
-          console.warn('Received non-JSON message:', event.data);
+          
           setLastMessage(event.data);
         }
       };
 
       socket.onclose = (event) => {
-        console.log(`WebSocket closed (code: ${event.code}). Retrying in 5s...`);
+        
         setIsConnected(false);
         // Only reconnect if we still have a token
         if (token) {

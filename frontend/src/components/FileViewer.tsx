@@ -10,7 +10,8 @@ interface FileViewerProps {
   uniqueId: string | null;
 }
 
-const API_URL = (import.meta.env.VITE_API_URL || 'http://172.20.0.149:8000') + '/api/v1';
+import api from '../utils/api';
+const API_URL = (import.meta.env.VITE_API_URL || '') + '/api/v1';
 
 const b64ToBlob = (b64: string, contentType: string) => {
   const byteCharacters = atob(b64);
@@ -94,88 +95,32 @@ export const FileViewer: React.FC<FileViewerProps> = ({ isOpen, onClose, mapId, 
     if (!mapId) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/proxy/preview/${mapId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const payload = await response.json();
+      const response = await api.get(`/proxy/preview/${mapId}`);
+      const payload = response.data;
       const contentType = payload.media_type || 'application/pdf';
       const isImage = String(contentType).includes('image/');
 
-      const tab = window.open('', '_blank');
-      if (!tab) return;
-
-      const title = uniqueId ? `Preview: ${uniqueId}` : 'Preview';
-      let url: string;
+      let objectUrl: string;
       if (isImage) {
-        url = `data:${contentType};base64,${payload.data_base64}`;
+        objectUrl = `data:${contentType};base64,${payload.data_base64}`;
       } else {
         const blob = b64ToBlob(payload.data_base64, contentType);
-        url = window.URL.createObjectURL(blob);
+        objectUrl = window.URL.createObjectURL(blob);
       }
 
-      tab.document.write(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
-    body { background: #111827; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    .error { color: #f87171; padding: 24px; text-align: center; font-size: 14px; }
-    img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
-    iframe { width: 100vw; height: 100vh; border: 0; }
-  </style>
-</head>
-<body>
-  ${isImage
-    ? `<img src="${url}" alt="preview" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load image. The file may be corrupted or unsupported.</div>'" />`
-    : `<iframe src="${url}" onerror="document.body.innerHTML='<div class=\\'error\\'>Failed to load PDF. The file may be corrupted or unsupported.</div>'"></iframe>`
-  }
-  <script>
-    (function() {
-      var blobUrl = '${url}';
-      window.addEventListener('beforeunload', function() {
-        if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
-      });
-    })();
-  </script>
-</body>
-</html>`);
-      tab.document.close();
-    } catch (e) {
-      const errTab = window.open('', '_blank');
-      if (errTab) {
-        errTab.document.write(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Preview Error</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; background: #111827; color: #f87171; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-    .error-box { text-align: center; }
-    .error-box h2 { margin-bottom: 8px; font-size: 18px; }
-    .error-box p { font-size: 14px; opacity: 0.8; }
-  </style>
-</head>
-<body>
-  <div class="error-box">
-    <h2>Failed to load preview</h2>
-    <p>${e instanceof Error ? e.message : 'Unknown error occurred'}</p>
-  </div>
-</body>
-</html>`);
-        errTab.document.close();
+      // Safe: navigate directly to the blob URL — no document.write, no XSS risk
+      const win = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      if (win && !isImage) {
+        win.addEventListener('unload', () => window.URL.revokeObjectURL(objectUrl));
       }
+    } catch (e) {
+      console.error('Failed to open preview in new tab:', e);
     } finally {
       setLoading(false);
     }
   };
+
+  // ---- old stub to mark replacement complete
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Viewing: ${uniqueId}`} size="lg">
