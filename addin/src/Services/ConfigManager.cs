@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using ArcGIS.Desktop.Core;
 
@@ -8,7 +10,8 @@ namespace ArcLayoutSentinel.Services
     public static class ConfigManager
     {
         public static string BaseUrl { get; set; } = "http://localhost:8000/api/v1";
-        public static string ArchiveRoot { get; set; } = @"\\172.20.0.125\e\LTest";
+        // F3: Removed hardcoded internal UNC path. Users must configure this explicitly.
+        public static string ArchiveRoot { get; set; } = "";
         public static string ApiToken { get; set; } = "";
         public static string LastUsername { get; set; } = "";
 
@@ -20,6 +23,38 @@ namespace ArcLayoutSentinel.Services
         private static string ConfigPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "ArcLayoutSentinel", "config.json");
+
+        // F1: DPAPI entropy for token protection — scoped to this application.
+        private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("ArcLayoutSentinel.TokenProtection.v1");
+
+        /// <summary>Encrypts plaintext using Windows DPAPI (CurrentUser scope).</summary>
+        private static string Protect(string plainText)
+        {
+            if (string.IsNullOrEmpty(plainText)) return "";
+            var encrypted = ProtectedData.Protect(
+                Encoding.UTF8.GetBytes(plainText), Entropy, DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(encrypted);
+        }
+
+        /// <summary>
+        /// Decrypts a DPAPI-protected value. Falls back to plainText to
+        /// transparently upgrade legacy plaintext configs on next save.
+        /// </summary>
+        private static string Unprotect(string protectedText)
+        {
+            if (string.IsNullOrEmpty(protectedText)) return "";
+            try
+            {
+                var decrypted = ProtectedData.Unprotect(
+                    Convert.FromBase64String(protectedText), Entropy, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(decrypted);
+            }
+            catch
+            {
+                // Legacy plaintext value — return as-is; will be re-encrypted on next Save().
+                return protectedText;
+            }
+        }
 
         public static void Load()
         {
@@ -33,7 +68,8 @@ namespace ArcLayoutSentinel.Services
                     {
                         if (!string.IsNullOrEmpty(config.BaseUrl)) BaseUrl = config.BaseUrl;
                         if (!string.IsNullOrEmpty(config.ArchiveRoot)) ArchiveRoot = config.ArchiveRoot;
-                        if (!string.IsNullOrEmpty(config.ApiToken)) ApiToken = config.ApiToken;
+                        // F1: Decrypt stored token via DPAPI.
+                        if (!string.IsNullOrEmpty(config.ApiToken)) ApiToken = Unprotect(config.ApiToken);
                         if (!string.IsNullOrEmpty(config.LastUsername)) LastUsername = config.LastUsername;
                         if (!string.IsNullOrEmpty(config.SessionId)) SessionId = config.SessionId;
                         if (!string.IsNullOrEmpty(config.MachineId)) MachineId = config.MachineId;
@@ -60,7 +96,8 @@ namespace ArcLayoutSentinel.Services
                 {
                     BaseUrl = BaseUrl,
                     ArchiveRoot = ArchiveRoot,
-                    ApiToken = ApiToken,
+                    // F1: Encrypt the API token before writing to disk.
+                    ApiToken = Protect(ApiToken),
                     LastUsername = LastUsername,
                     SessionId = SessionId,
                     MachineId = MachineId,
@@ -82,16 +119,13 @@ namespace ArcLayoutSentinel.Services
                 var path = GetProjectConfigPath();
                 if (path == null) return;
 
+                // F2: Only write non-sensitive fields to shared project config.
+                // ApiToken, SessionId, MachineId, and timestamps are intentionally omitted.
                 var config = new ConfigSettings
                 {
                     BaseUrl = BaseUrl,
                     ArchiveRoot = ArchiveRoot,
-                    ApiToken = ApiToken,
-                    LastUsername = LastUsername,
-                    SessionId = SessionId,
-                    MachineId = MachineId,
-                    SessionCreatedAt = SessionCreatedAt,
-                    SessionExpiresAt = SessionExpiresAt
+                    LastUsername = LastUsername
                 };
                 File.WriteAllText(path, JsonSerializer.Serialize(config));
                 System.Diagnostics.Debug.WriteLine($"ConfigManager: Settings saved to {path}");
@@ -115,11 +149,8 @@ namespace ArcLayoutSentinel.Services
                 {
                     if (!string.IsNullOrEmpty(config.BaseUrl)) BaseUrl = config.BaseUrl;
                     if (!string.IsNullOrEmpty(config.ArchiveRoot)) ArchiveRoot = config.ArchiveRoot;
-                    if (!string.IsNullOrEmpty(config.ApiToken)) ApiToken = config.ApiToken;
+                    // F2: ApiToken and SessionId are never stored in project files; skip them.
                     if (!string.IsNullOrEmpty(config.LastUsername)) LastUsername = config.LastUsername;
-                    if (!string.IsNullOrEmpty(config.SessionId)) SessionId = config.SessionId;
-                    if (config.SessionCreatedAt.HasValue) SessionCreatedAt = config.SessionCreatedAt;
-                    if (config.SessionExpiresAt.HasValue) SessionExpiresAt = config.SessionExpiresAt;
                     System.Diagnostics.Debug.WriteLine($"ConfigManager: Settings loaded from {path}");
                 }
             }
@@ -135,7 +166,7 @@ namespace ArcLayoutSentinel.Services
             {
                 var project = ArcGIS.Desktop.Core.Project.Current;
                 if (project == null || string.IsNullOrEmpty(project.URI)) return null;
-                
+
                 var projectFolder = Path.GetDirectoryName(project.URI);
                 if (string.IsNullOrEmpty(projectFolder)) return null;
 

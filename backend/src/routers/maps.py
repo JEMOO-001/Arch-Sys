@@ -101,12 +101,12 @@ async def create_map(
     if current_user.user_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
 
-    logger.info("create_map received: %s", map_in.model_dump())
+    logger.debug("create_map received: %s", map_in.model_dump())
 
     unique_id = map_in.unique_id or await generate_unique_id(db, map_in.category_prefix)
 
     dump = map_in.model_dump(exclude={"category_prefix", "unique_id"})
-    logger.info(
+    logger.debug(
         "Creating Map: unique_id=%s analyst_id=%s dump=%s",
         unique_id, current_user.user_id, dump,
     )
@@ -123,7 +123,7 @@ async def create_map(
     await db.commit()
     await db.refresh(db_map)
 
-    logger.info(
+    logger.debug(
         "Map created: id=%s uid=%s income=%s outcome=%s to_whom=%s status=%s",
         db_map.map_id, db_map.unique_id, db_map.income_num,
         db_map.outcome_num, db_map.to_whom, db_map.status,
@@ -439,18 +439,29 @@ async def create_map_comment(
 
     attachment_path = None
     if file:
-        # Secure filename and save
-        ext = os.path.splitext(file.filename)[1].lower()
+        ext = os.path.splitext(file.filename or "")[1].lower()
         if ext not in [".jpg", ".jpeg", ".png", ".gif"]:
             raise HTTPException(status_code=400, detail="Only images are allowed (.jpg, .png, .gif)")
-        
+
         filename = f"{uuid.uuid4()}{ext}"
         filepath = os.path.join(settings.UPLOAD_DIR, filename)
-        
-        with open(filepath, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-        
+
+        max_bytes = 10 * 1024 * 1024
+        total = 0
+        too_large = False
+
+        async with aiofiles.open(filepath, "wb") as buffer:
+            while chunk := await file.read(1024 * 1024):
+                total += len(chunk)
+                if total > max_bytes:
+                    too_large = True
+                    break
+                await buffer.write(chunk)
+
+        if too_large:
+            os.remove(filepath)
+            raise HTTPException(status_code=413, detail="Attachment too large (max 10 MB)")
+
         attachment_path = f"/static/uploads/{filename}"
 
     now = datetime.now(timezone.utc) + timedelta(hours=3)

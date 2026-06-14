@@ -226,9 +226,7 @@ async def init_database():
             INSERT INTO Users (username, password_hash, full_name, role, active, tenant_id)
             VALUES (:username, :hash, :full_name, :role, 1, 1)
         """), {"username": "admin", "hash": admin_hash, "full_name": "System Administrator", "role": "admin"})
-        print("  ✓ Admin user created")
-        print(f"     Username: admin")
-        print(f"     Password: {admin_password}")
+        print("  ✓ Admin user created (username: admin)")
 
         # Seed test edit user
         edit_password = os.environ.get("SEED_EDIT_PASSWORD") or _require_seed_password("SEED_EDIT_PASSWORD")
@@ -239,9 +237,7 @@ async def init_database():
             INSERT INTO Users (username, password_hash, full_name, role, active, tenant_id)
             VALUES (:username, :hash, :full_name, :role, 1, 1)
         """), {"username": "edit", "hash": edit_hash, "full_name": "Test Edit User", "role": "edit"})
-        print("  ✓ Edit user created")
-        print(f"     Username: edit")
-        print(f"     Password: {edit_password}")
+        print("  ✓ Edit user created (username: edit)")
 
         # Seed a test project
         await conn.execute(text("""
